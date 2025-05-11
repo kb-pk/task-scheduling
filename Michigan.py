@@ -188,11 +188,11 @@ def cross_pair(first, second):
 
     # nadpisanie skrzyżowanych osobników
     first[:len(tmp_first)] = tmp_first
-    first[len(tmp_first): len(first)] = np.NaN
+    first[len(tmp_first): len(first)] = np.nan
 
     # nadpisanie skrzyżowanych osobników
     second[:len(tmp_second)] = tmp_second
-    second[len(tmp_second): len(second)] = np.NaN
+    second[len(tmp_second): len(second)] = np.nan
 
 
 def generate_population(machines, tasks):
