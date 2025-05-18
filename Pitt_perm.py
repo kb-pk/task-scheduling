@@ -272,6 +272,36 @@ def ordered_crossover(dad, mom):
 
     return daughter, son
 
+def cycle_crossover(dad, mom):
+    def create_child(primary_parent, other_parent):
+        cycle = []
+
+        inx = 0
+        cycle.append(inx)
+
+        while True:
+            tmp = other_parent[inx]
+            inx = primary_parent.index(tmp)
+            cycle.append(inx)
+
+            if inx == 0:
+                break
+
+        child = [i for i in range(len(primary_parent))]
+
+        for i, _ in enumerate(child):
+            if i in cycle:
+                child[i] = primary_parent[i]
+            else:
+                child[i] = other_parent[i]
+
+        return child
+
+    daughter    = create_child(dad, mom)
+    son         = create_child(mom, dad)
+
+    return daughter, son
+
 
 def partial_mapped_crossover(dad, mom):
     # select a random [x, y] substring from both parents
