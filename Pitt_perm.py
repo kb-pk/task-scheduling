@@ -273,6 +273,57 @@ def ordered_crossover(dad, mom):
     return daughter, son
 
 
+def partial_mapped_crossover(dad, mom):
+    # select a random [x, y] substring from both parents
+    size = len(mom)
+    start, end = sorted([random.randrange(size) for _ in range(2)])
+    dad_substr = dad[start:end]
+    mom_substr = mom[start:end]
+
+    # determine mapping to legalise offspring
+    # init mapping array - add initial pairs
+    mappings = [list(x) for x in zip(dad_substr, mom_substr)]
+
+    # further the initial mappings
+    last_iter = []
+    while last_iter != mappings:
+        last_iter = mappings.copy()
+
+        # -1 cuz we dont need to compare the last one against anything
+        for i in range(len(last_iter) - 1):
+            # only compare "forward" and not against itself
+            for j in range(i + 1, len(last_iter)):
+                d = last_iter[i]
+                m = last_iter[j]
+                merged = []
+
+                if d[0] == m[-1]:
+                    # we dont care abt the middle ones (like 1 -> 6 -> 3 mapping)
+                    merged = [m[0], d[-1]]
+
+                if d[-1] == m[0]:
+                    merged = [d[0], m[-1]]
+
+                if merged != []:
+                    mappings[i] = merged
+                    del mappings[j]
+
+    # legalise offspring
+    daughter_no_substr  = mom[:start] + mom[end:]
+    son_no_substr       = dad[:start] + dad[end:]
+    for [d, m] in mappings:
+        inx = daughter_no_substr.index(d)
+       daughter_no_substr[inx] = m
+
+        inx = son_no_substr.index(m)
+        son_no_substr[inx] = d
+
+    daughter    = daughter_no_substr[:start] + dad_substr + daughter_no_substr[start:]
+    son         = son_no_substr[:start] + mom_substr + son_no_substr[start:]
+
+    return daughter, son
+
+
 def population_makespan(etc, population, machines = None):
     individuals_score = []
     individuals_other = []
