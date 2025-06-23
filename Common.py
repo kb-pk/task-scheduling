@@ -1,5 +1,6 @@
-import numpy as np 
+import numpy as np
 import pandas as pd
+import os
 
 MAKESPAN_MODE = 0
 ENERGY_MODE = 1
@@ -142,3 +143,12 @@ def check_task_machine_mapping(machines, tasks, features, mappings):
 
     return True
 
+
+def ensure_directory(path: str) -> None:
+    """
+    Ensure that the directory for the given file path exists.
+    If it doesn't, create it (including any necessary parent dirs).
+    """
+    directory = os.path.dirname(path)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)

@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.utils import shuffle
 
 import Common
+from Common import ensure_directory
 
 columns = ''
 
@@ -403,6 +404,7 @@ def write_to_csv(best_score, population, etc, machines, max_time):
     :param population: population
     :param etc: macierz etc
     """
+    ensure_directory('results/output_michigan.csv')
     with open('results/output_michigan.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_NONNUMERIC)
         writer.writerow(['{} optimized'.format(Common.scheduling_modes[Common.scheduling_mode]), ('%f' % best_score).replace('.', ',')])
@@ -481,6 +483,7 @@ def main():
     # zapis wyniku do pliku csv
     write_to_csv(best_score, pop.sort_index(), etc, machines, max_time)
 
+    ensure_directory('results/result_michigan')
     open('results/result_michigan', 'a').write(str(best_score) + "," + str(other_param) + "\n")
 
 

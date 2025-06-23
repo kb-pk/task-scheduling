@@ -15,6 +15,7 @@ import csv
 from collections import Counter
 
 import Common
+from Common import ensure_directory
 
 ITERATIONS_NUMBER = 100
 POPULATION_SIZE = 10
@@ -261,6 +262,7 @@ def prepareScheduleToSave(schedule, machinesSize, etcMatrix):
 
 
 def saveResultsToFile(fileName, bestAdaptationRate, bestSchedule, machinesSize, etcMatrix):
+    ensure_directory(fileName)
     wfile = open(fileName, "w", newline='')
     writer = csv.writer(wfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     writer.writerow(["Best adaptation rate:", "{0:.2f}".format(bestAdaptationRate)])
@@ -375,6 +377,7 @@ def write_to_csv(best_score, bestSchedule, etc, machines, max_time):
     max_tasks = get_max_tasks_number(bestSchedule)
     tasks_of_machines = get_tasks_of_machines(bestSchedule)
 
+    ensure_directory('results/output_pitt_direct.csv')
     with open('results/output_pitt_direct.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_NONNUMERIC)
         writer.writerow(['{} optimized'.format(Common.scheduling_modes[Common.scheduling_mode]), ('%f' % best_score).replace('.', ',')])
@@ -442,6 +445,7 @@ def scheduleTasks(numberOfIterations, populationSize):
         print("Best makespan value: " + "{0:.2f}".format(bestAdaptationRate) + " energy usage: " + "{0:.2f}".format(otherForBest))
     elif Common.scheduling_mode == Common.ENERGY_MODE:
         print("Best energy usage: " + "{0:.2f}".format(bestAdaptationRate) + " makespan: " + "{0:.2f}".format(otherForBest))
+    ensure_directory('results/result_pitt_direct')
     open('results/result_pitt_direct', 'a').write(str(bestAdaptationRate) + "," + str(otherForBest) + "\n")
 
     if Common.scheduling_mode == Common.MAKESPAN_MODE:

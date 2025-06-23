@@ -5,6 +5,7 @@ from sklearn.utils import shuffle
 import random
 import math
 import Common
+from Common import ensure_directory
 
 ITERATIONS_NUMBER = 100
 POPULATION_SIZE = 10
@@ -425,6 +426,7 @@ def write_to_csv(best_score, best_individual, etc, machines, max_time):
     max_tasks = get_max_tasks_number(best_individual)
     tasks_of_machines = get_tasks_of_machines(best_individual)
 
+    ensure_directory('results/output_pitt_perm.csv')
     with open('results/output_pitt_perm.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_NONNUMERIC)
         writer.writerow(['{} optimized'.format(Common.scheduling_modes[Common.scheduling_mode]), ('%f' % best_score).replace('.', ',')])
@@ -481,6 +483,7 @@ def main():
                 
         print("Best {}: {} | {}: {}"
               .format(Common.scheduling_modes[Common.scheduling_mode], str(best_score), Common.scheduling_modes[(Common.scheduling_mode+1)%2], str(other_param)))
+        ensure_directory('results/result_pitt_perm')
         open('results/result_pitt_perm', 'a').write(str(best_score) + "," + str(other_param) + "\n")
     except KeyboardInterrupt:
         # niszczenie obiektow itp
