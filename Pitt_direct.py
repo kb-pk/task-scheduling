@@ -46,7 +46,6 @@ def generateFirstPopulation(machinesNumber, taskNumber, populationSize):
     :param taskNumber:
     :return:
     """
-    # print(populationSize)
     population = []
     for i in range(populationSize):
         individual = generateOneIndividual(machinesNumber, taskNumber)
@@ -72,8 +71,6 @@ def createNewGenerationFromParents(parents):
     crossoverPoints.sort()
     firstNewIndividual = []
     secondNewIndividual = []
-    # print("First" + str(len(parents[0])))
-    # print("Second" + str(len(parents[1])))
     for i in range(NUMBER_OF_CROSSOVER_POINTS):
         if i == 0:
             firstNewIndividual.extend(parents[0][:crossoverPoints[0]])
@@ -85,12 +82,6 @@ def createNewGenerationFromParents(parents):
         parents[NUMBER_OF_CROSSOVER_POINTS % 2][crossoverPoints[NUMBER_OF_CROSSOVER_POINTS - 1]:])
     secondNewIndividual.extend(
         parents[(NUMBER_OF_CROSSOVER_POINTS + 1) % 2][crossoverPoints[NUMBER_OF_CROSSOVER_POINTS - 1]:])
-    # print(crossoverPoints)
-    # print(parents[0])
-    # print(parents[1])
-    # print(firstNewIndividual)
-    # print(secondNewIndividual)
-    # print("-----------")
     return (firstNewIndividual, secondNewIndividual)
 
 
@@ -220,9 +211,6 @@ def iterateNextPopulation(newPopulation, size):
     newPopulation = selectSolutions(newPopulation)
     newPopulation = crossoverPopulation(newPopulation, len(machines))
     newPopulation = mutatePopulation(newPopulation, len(machines))
-    # for ind in newPopulation:
-    #     print(ind)
-    # print("###########")
     return newPopulation
 
 
@@ -238,8 +226,6 @@ def getBestScheduleFromPopulation(population, etcMatrix, machinesSize):
 
 def getTasksOnMachine(machineId, bestSchedule, etcMatrix):
     machineTasks = []
-    # print(machineId)
-    # print(bestSchedule)
     time = 0.0
     for i in range(len(bestSchedule)):
         if bestSchedule[i] == machineId:
