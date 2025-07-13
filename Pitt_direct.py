@@ -439,7 +439,7 @@ def schedule_tasks(number_of_iterations, population_size):
 
 
 def main():
-    # scheduleTasks(ITERATIONS_NUMBER, POPULATION_SIZE)
+    schedule_tasks(ITERATIONS_NUMBER, POPULATION_SIZE)
     security_features = Common.read_security_features()
 
 
