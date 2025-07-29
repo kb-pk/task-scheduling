@@ -29,30 +29,37 @@ features = Common.read_security_features()
 machines = Common.read_machines(features)
 tasks = Common.read_tasks(features)
 
-def generate_one_individual(machines_number, task_number):
+
+def map_possible_machines_to_tasks():
+    """
+    Mapuje zadania i maszyny, które dane zadanie mogą wykonać (na podstawie features).
+    :return: Słownik {task_id: [machine_id, machine_id, ...], ...}
+    """
+    possible_machines_for_tasks = {task_id: [
+        machine_id for machine_id in machines.index.values
+        if Common.can_execute_task_on_machine(machines.iloc[machine_id], tasks.iloc[task_id], features)
+    ] for task_id in tasks.index.values}
+
+    return possible_machines_for_tasks
+
+
+def generate_individual(possible_machines_for_tasks):
     individual = []
-    for i in range(machines_number):
-        individual.append(i)
-    for i in range(machines_number, task_number):
-        individual.append(random.randint(0, machines_number - 1))
-    random.shuffle(individual)
+
+    for task_id, possible_machines in possible_machines_for_tasks.items():
+        individual.append(random.choice(possible_machines))
+
     return individual
 
 
-def generate_first_population(machines_number, task_number, population_size):
-    """
-    Generuje pierwsza, losowa populacje
-    :param machines_number:
-    :param task_number:
-    :return:
-    """
+def generate_population(population_size):
     population = []
+    possible_machines_for_tasks = map_possible_machines_to_tasks()
+
     for i in range(population_size):
-        individual = generate_one_individual(machines_number, task_number)
-        # Generuj nową populację dopóki nie będzie ona odpowiednia
-        while not Common.check_task_machine_mapping(machines, tasks, features, individual):
-            individual = generate_one_individual(machines_number, task_number)
-        population.append(individual)
+        new_individual = generate_individual(possible_machines_for_tasks)
+        population.append(new_individual)
+
     return population
 
 
@@ -401,7 +408,7 @@ def schedule_tasks(number_of_iterations, population_size):
         return
     random.seed()
     etc_matrix = Common.generate_etc_matrix(machines, tasks)
-    first_population = generate_first_population(len(machines), len(tasks), population_size)
+    first_population = generate_population(population_size)
     best_population = first_population
     best_adaptation_rate, other_for_best = rate_adaptation(first_population, etc_matrix, len(machines), machines)
     if Common.scheduling_mode == Common.MAKESPAN_MODE:
