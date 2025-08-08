@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.utils import shuffle
 import random
 import math
-import Common
+import scheduler.Common as Common
 
 ITERATIONS_NUMBER = 100
 POPULATION_SIZE = 10
