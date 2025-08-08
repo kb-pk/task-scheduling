@@ -129,13 +129,12 @@ def check_task_machine_mapping(machines, tasks, features, mappings):
     :param machines: macierz maszyn
     :param tasks: macierz zadań
     :param mappings: przypisanie poszczegolnych zadań do maszyn w formacie: 
-        [task_id, task_id, task_id, ...]
-        gdzie indeks w tabeli jest równy id maszyny, a każda wartość przedstawia id zadania
+        [machine_id, machine_id, machine_id, ...]
+        gdzie indeks w tabeli jest równy id zadania, a każda wartość przedstawia id maszyny
     :return True jesli dopasowanie jest poprawne, False w przeciwnym wypadku
     """
-    for machine_id in range(0, len(mappings)):
+    for task_id, machine_id in enumerate(mappings):
         machine = machines.iloc[machine_id]
-        task_id = mappings[machine_id]
         task = tasks.iloc[task_id]
         if not can_execute_task_on_machine(machine, task, features):
             return False

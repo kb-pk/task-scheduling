@@ -29,35 +29,41 @@ features = Common.read_security_features()
 machines = Common.read_machines(features)
 tasks = Common.read_tasks(features)
 
-def generateOneIndividual(machinesNumber, taskNumber):
-    inividual = []
-    for i in range(machinesNumber):
-        inividual.append(i)
-    for i in range(machinesNumber, taskNumber):
-        inividual.append(random.randint(0, machinesNumber - 1))
-    random.shuffle(inividual)
-    return inividual
+
+def map_possible_machines_to_tasks():
+    """
+    Mapuje zadania i maszyny, które dane zadanie mogą wykonać (na podstawie features).
+    :return: Słownik {task_id: [machine_id, machine_id, ...], ...}
+    """
+    possible_machines_for_tasks = {task_id: [
+        machine_id for machine_id in machines.index.values
+        if Common.can_execute_task_on_machine(machines.iloc[machine_id], tasks.iloc[task_id], features)
+    ] for task_id in tasks.index.values}
+
+    return possible_machines_for_tasks
 
 
-def generateFirstPopulation(machinesNumber, taskNumber, populationSize):
-    """
-    Generuje pierwsza, losowa populacje
-    :param machinesNumber:
-    :param taskNumber:
-    :return:
-    """
-    # print(populationSize)
+def generate_individual(possible_machines_for_tasks):
+    individual = []
+
+    for task_id, possible_machines in possible_machines_for_tasks.items():
+        individual.append(random.choice(possible_machines))
+
+    return individual
+
+
+def generate_population(population_size):
     population = []
-    for i in range(populationSize):
-        individual = generateOneIndividual(machinesNumber, taskNumber)
-        # Generuj nową populację dopóki nie będzie ona odpowiednia
-        while not Common.check_task_machine_mapping(machines, tasks, features, individual):
-            individual = generateOneIndividual(machinesNumber, taskNumber)
-        population.append(individual)
+    possible_machines_for_tasks = map_possible_machines_to_tasks()
+
+    for i in range(population_size):
+        new_individual = generate_individual(possible_machines_for_tasks)
+        population.append(new_individual)
+
     return population
 
 
-def selectSolutions(population):
+def select_solutions(population):
     """
     Funkcja selekcji zwracajaca najlepszych osobnikow - u nas zwraca cala populacje
     :param population:
@@ -66,149 +72,141 @@ def selectSolutions(population):
     return population
 
 
-def createNewGenerationFromParents(parents):
-    individualLength = len(parents[0])
-    crossoverPoints = random.sample(range(0, individualLength - 1), NUMBER_OF_CROSSOVER_POINTS)
-    crossoverPoints.sort()
-    firstNewIndividual = []
-    secondNewIndividual = []
-    # print("First" + str(len(parents[0])))
-    # print("Second" + str(len(parents[1])))
+def create_new_generation_from_parents(parents):
+    individual_length = len(parents[0])
+    crossover_points = random.sample(range(0, individual_length - 1), NUMBER_OF_CROSSOVER_POINTS)
+    crossover_points.sort()
+    first_new_individual = []
+    second_new_individual = []
     for i in range(NUMBER_OF_CROSSOVER_POINTS):
         if i == 0:
-            firstNewIndividual.extend(parents[0][:crossoverPoints[0]])
-            secondNewIndividual.extend(parents[1][:crossoverPoints[0]])
+            first_new_individual.extend(parents[0][:crossover_points[0]])
+            second_new_individual.extend(parents[1][:crossover_points[0]])
         else:
-            firstNewIndividual.extend(parents[i % 2][crossoverPoints[i - 1]:crossoverPoints[i]])
-            secondNewIndividual.extend(parents[(i + 1) % 2][crossoverPoints[i - 1]:crossoverPoints[i]])
-    firstNewIndividual.extend(
-        parents[NUMBER_OF_CROSSOVER_POINTS % 2][crossoverPoints[NUMBER_OF_CROSSOVER_POINTS - 1]:])
-    secondNewIndividual.extend(
-        parents[(NUMBER_OF_CROSSOVER_POINTS + 1) % 2][crossoverPoints[NUMBER_OF_CROSSOVER_POINTS - 1]:])
-    # print(crossoverPoints)
-    # print(parents[0])
-    # print(parents[1])
-    # print(firstNewIndividual)
-    # print(secondNewIndividual)
-    # print("-----------")
-    return (firstNewIndividual, secondNewIndividual)
+            first_new_individual.extend(parents[i % 2][crossover_points[i - 1]:crossover_points[i]])
+            second_new_individual.extend(parents[(i + 1) % 2][crossover_points[i - 1]:crossover_points[i]])
+    first_new_individual.extend(
+        parents[NUMBER_OF_CROSSOVER_POINTS % 2][crossover_points[NUMBER_OF_CROSSOVER_POINTS - 1]:])
+    second_new_individual.extend(
+        parents[(NUMBER_OF_CROSSOVER_POINTS + 1) % 2][crossover_points[NUMBER_OF_CROSSOVER_POINTS - 1]:])
+    return (first_new_individual, second_new_individual)
 
 
-def isIndividualValid(individual, machinesSize):
-    return set(range(machinesSize)).issubset(individual)
+def is_individual_valid(individual, machines_size):
+    return set(range(machines_size)).issubset(individual)
 
 
-def createNewGenerationFromParentsWithValidation(parents, machinesSize):
+def create_new_generation_from_parents_with_validation(parents, machines_size):
     children = ()
     while True:
-        children = createNewGenerationFromParents(parents)
-        if isIndividualValid(children[0], machinesSize) and isIndividualValid(children[1], machinesSize):
+        children = create_new_generation_from_parents(parents)
+        if is_individual_valid(children[0], machines_size) and is_individual_valid(children[1], machines_size):
             break
     return children
 
 
-def crossoverPopulation(population, machinesSize):
+def crossover_population(population, machines_size):
     """
     Funkcja krzyzujaca - zwraca nowych osobnikow poprzez proces reprodukcji ich przodkow
     :param population:
     :return:
     """
-    newPopulation = []
+    new_population = []
     for i in range(0, len(population), 2):
-        newGeneration = createNewGenerationFromParentsWithValidation(population[i:i + 2], machinesSize)
-        newPopulation.append(newGeneration[0])
-        newPopulation.append(newGeneration[1])
-    return newPopulation
+        new_generation = create_new_generation_from_parents_with_validation(population[i:i + 2], machines_size)
+        new_population.append(new_generation[0])
+        new_population.append(new_generation[1])
+    return new_population
 
 
-def isMutationPossible(machineId, individual):
+def is_mutation_possible(machine_id, individual):
     counter = 0
-    isMutationPossible = False
+    is_mutation_possible = False
     for genomeValue in individual:
-        if genomeValue == machineId:
+        if genomeValue == machine_id:
             counter += 1
         if counter == 2:
-            isMutationPossible = True
+            is_mutation_possible = True
             break
-    return isMutationPossible
+    return is_mutation_possible
 
 
-def shouldMutate():
-    mutationRandVal = random.uniform(0, 1)
-    return mutationRandVal <= MUTATION_POSSIBILITY
+def should_mutate():
+    mutation_rand_val = random.uniform(0, 1)
+    return mutation_rand_val <= MUTATION_POSSIBILITY
 
 
-def mutateGenome(machinesSize, machineId):
-    newValue = 0
+def mutate_genome(machines_size, machine_id):
+    new_value = 0
     while True:
-        newValue = random.randint(0, machinesSize - 1)
-        if newValue != machineId:
+        new_value = random.randint(0, machines_size - 1)
+        if new_value != machine_id:
             break
-    return newValue
+    return new_value
 
 
-def mutateIndividual(individual, machinesSize):
-    newIndividual = []
-    for machineId in individual:
-        if shouldMutate() and isMutationPossible(machineId, individual):
-            newIndividual.append(mutateGenome(machinesSize, machineId))
+def mutate_individual(individual, machines_size):
+    new_individual = []
+    for machine_id in individual:
+        if should_mutate() and is_mutation_possible(machine_id, individual):
+            new_individual.append(mutate_genome(machines_size, machine_id))
         else:
-            newIndividual.append(machineId)
-    return newIndividual
+            new_individual.append(machine_id)
+    return new_individual
 
 
-def mutatePopulation(population, machinesSize):
+def mutate_population(population, machines_size):
     """
     Funkcja mutacji - jej zadaniem jest wprowadzenie do chromosomu losowych zmian
     :param population:
     :return:
     """
-    newPopulation = []
+    new_population = []
     for individual in population:
-        newPopulation.append(mutateIndividual(individual, machinesSize))
-    return newPopulation
+        new_population.append(mutate_individual(individual, machines_size))
+    return new_population
 
 
-def calculateIndividualMakespan(population, etcMatrix, machinesSize):
-    machinesValues = [0.0] * machinesSize
+def calculate_individual_makespan(population, etc_matrix, machines_size):
+    machines_values = [0.0] * machines_size
     for i in range(len(population)):
-        machinesValues[population[i]] += etcMatrix[i, population[i]]
-    return max(machinesValues)
+        machines_values[population[i]] += etc_matrix[i, population[i]]
+    return max(machines_values)
 
-def calculateIndividualPower(population, etcMatrix, machinesSize, machines):
-    machinesValues = [0.0] * machinesSize
+def calculate_individual_power(population, etc_matrix, machines_size, machines):
+    machines_values = [0.0] * machines_size
     for i in range(len(population)):
-        machinesValues[population[i]] += etcMatrix[i, population[i]]
-    maxTime = max(machinesValues)
-    totalPower = 0
-    for i in range(len(machinesValues)):
-        totalPower = totalPower + machinesValues[i] * machines.values[i][2] + (maxTime - machinesValues[i]) * machines.values[i][3]
-    return totalPower
+        machines_values[population[i]] += etc_matrix[i, population[i]]
+    max_time = max(machines_values)
+    total_power = 0
+    for i in range(len(machines_values)):
+        total_power = total_power + machines_values[i] * machines.values[i][2] + (max_time - machines_values[i]) * machines.values[i][3]
+    return total_power
 
-def rateAdaptation(population, etcMatrix, machinesSize, machines = None):
+def rate_adaptation(population, etc_matrix, machines_size, machines = None):
     """
     Ocena przystosowania - ocenia przystosowania nowej populacji - u nas jest to czas makespan
     Zadaniem naszego programu jest uzyskanie jak najmniejszej wartosci
     :param population:
     :return:
     """
-    bestIndividual = 0.0
-    otherParam = 0.0
+    best_individual = 0.0
+    other_param = 0.0
     for i in range(len(population)):
         individual = 0.0
         if Common.scheduling_mode == Common.MAKESPAN_MODE:
-            individual = calculateIndividualMakespan(population[i], etcMatrix, machinesSize)
-            otherParam = calculateIndividualPower(population[i], etcMatrix, machinesSize, machines)
+            individual = calculate_individual_makespan(population[i], etc_matrix, machines_size)
+            other_param = calculate_individual_power(population[i], etc_matrix, machines_size, machines)
         elif Common.scheduling_mode == Common.ENERGY_MODE:
-            individual = calculateIndividualPower(population[i], etcMatrix, machinesSize, machines)
-            otherParam = calculateIndividualMakespan(population[i], etcMatrix, machinesSize)
-        if individual < bestIndividual or i == 0:
-            bestIndividual = individual
-            otherForBest = otherParam
-    return bestIndividual, otherForBest
+            individual = calculate_individual_power(population[i], etc_matrix, machines_size, machines)
+            other_param = calculate_individual_makespan(population[i], etc_matrix, machines_size)
+        if individual < best_individual or i == 0:
+            best_individual = individual
+            other_for_best = other_param
+    return best_individual, other_for_best
 
 
-def shouldStopIterations():
+def should_stop_iterations():
     """
     Warunek stopu - u nas brana pod uwage tylko liczba iteracji
     :return:
@@ -216,89 +214,84 @@ def shouldStopIterations():
     return False
 
 
-def iterateNextPopulation(newPopulation, size):
-    newPopulation = selectSolutions(newPopulation)
-    newPopulation = crossoverPopulation(newPopulation, len(machines))
-    newPopulation = mutatePopulation(newPopulation, len(machines))
-    # for ind in newPopulation:
-    #     print(ind)
-    # print("###########")
-    return newPopulation
+def iterate_next_population(new_population, size):
+    new_population = select_solutions(new_population)
+    new_population = crossover_population(new_population, len(machines))
+    new_population = mutate_population(new_population, len(machines))
+    return new_population
 
 
-def getBestScheduleFromPopulation(population, etcMatrix, machinesSize):
-    bestIndividualMakespan = 0.0
+def get_best_schedule_from_population(population, etc_matrix, machines_size):
+    best_individual_makespan = 0.0
     for i in range(len(population)):
-        individualMakespan = calculateIndividualMakespan(population[i], etcMatrix, machinesSize)
-        if individualMakespan < bestIndividualMakespan or i == 0:
-            bestIndividualMakespan = individualMakespan
-            bestIndividual = population[i]
-    return bestIndividual
+        individual_makespan = calculate_individual_makespan(population[i], etc_matrix, machines_size)
+        if individual_makespan < best_individual_makespan or i == 0:
+            best_individual_makespan = individual_makespan
+            best_individual = population[i]
+    return best_individual
 
 
-def getTasksOnMachine(machineId, bestSchedule, etcMatrix):
-    machineTasks = []
-    # print(machineId)
-    # print(bestSchedule)
+def get_tasks_on_machine(machine_id, best_schedule, etc_matrix):
+    machine_tasks = []
     time = 0.0
-    for i in range(len(bestSchedule)):
-        if bestSchedule[i] == machineId:
-            taskValueOnMachine = etcMatrix[i][machineId]
-            time += taskValueOnMachine
-            machineTasks.append(str(i) + "(" + "{0:.2f}".format(taskValueOnMachine) + ")")
-    machineTasks = ["{0:.2f}".format(time)] + machineTasks
-    return machineTasks
+    for i in range(len(best_schedule)):
+        if best_schedule[i] == machine_id:
+            task_value_on_machine = etc_matrix[i][machine_id]
+            time += task_value_on_machine
+            machine_tasks.append(str(i) + "(" + "{0:.2f}".format(task_value_on_machine) + ")")
+    machine_tasks = ["{0:.2f}".format(time)] + machine_tasks
+    return machine_tasks
 
 
-def prepareScheduleToSave(schedule, machinesSize, etcMatrix):
+def prepare_schedule_to_save(schedule, machines_size, etc_matrix):
     rows = []
-    for i in range(machinesSize):
+    for i in range(machines_size):
         row = []
         row.append(str(i))
-        row.extend(getTasksOnMachine(i, schedule, etcMatrix))
+        row.extend(get_tasks_on_machine(i, schedule, etc_matrix))
         rows.append(row)
     return rows
 
 
-def saveResultsToFile(fileName, bestAdaptationRate, bestSchedule, machinesSize, etcMatrix):
-    wfile = open(fileName, "w", newline='')
+def save_results_to_file(file_name, best_adaptation_rate, best_schedule, machines_size, etc_matrix):
+    wfile = open(file_name, "w", newline='')
     writer = csv.writer(wfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    writer.writerow(["Best adaptation rate:", "{0:.2f}".format(bestAdaptationRate)])
+    writer.writerow(["Best adaptation rate:", "{0:.2f}".format(best_adaptation_rate)])
     writer.writerow(["MachineID", "Time on machine", "MachineId(time)"])
-    saveablePopulation = prepareScheduleToSave(bestSchedule, machinesSize, etcMatrix)
-    for row in saveablePopulation:
+    saveable_population = prepare_schedule_to_save(best_schedule, machines_size, etc_matrix)
+    for row in saveable_population:
         writer.writerow(row)
     wfile.close()
 
 
-def get_tasks_of_machines(bestSchedule):
+def get_tasks_of_machines(best_schedule):
     tasks_of_machines = [[] for _ in range(len(machines))]
 
-    for i in range(len(bestSchedule)):
+    for i in range(len(best_schedule)):
         for j in range(len(machines)):
-            if bestSchedule[i] == j:
+            if best_schedule[i] == j:
                 tasks_of_machines[j].append(i)
 
     return tasks_of_machines
 
 
-def get_max_tasks_number(bestSchedule):
-    c = Counter(bestSchedule)
+def get_max_tasks_number(best_schedule):
+    c = Counter(best_schedule)
     max_tasks = max(c.values())
 
     return max_tasks
 
 
-def pretty_print(bestSchedule, etc, machines, max_time):
+def pretty_print(best_schedule, etc, machines, max_time):
     """
     Wypisywanie harmonogramu zadan (populacji) wraz z czasami wykonania zadan.
 
-    :param bestSchedule: harmonogram dla najlepszego rozwiazania
+    :param best_schedule: harmonogram dla najlepszego rozwiazania
     :param etc: macierz etc
     """
     print('-----------------------------------------------------')
-    max_tasks = get_max_tasks_number(bestSchedule)
-    tasks_of_machines = get_tasks_of_machines(bestSchedule)
+    max_tasks = get_max_tasks_number(best_schedule)
+    tasks_of_machines = get_tasks_of_machines(best_schedule)
 
     columns = format('', '8s')
     for i in range(0, max_tasks):
@@ -338,15 +331,15 @@ def pretty_print(bestSchedule, etc, machines, max_time):
     print('-----------------------------------------------------')
 
 
-def print_no_time(bestSchedule):
+def print_no_time(best_schedule):
     """
     Wypisywanie harmonogramu zadan (populacji) bez czasow wykonania zadan.
 
-    :param bestSchedule: harmonogram dla najlepszego rozwiazania
+    :param best_schedule: harmonogram dla najlepszego rozwiazania
     """
     print('-----------------------------------------------------')
-    max_tasks = get_max_tasks_number(bestSchedule)
-    tasks_of_machines = get_tasks_of_machines(bestSchedule)
+    max_tasks = get_max_tasks_number(best_schedule)
+    tasks_of_machines = get_tasks_of_machines(best_schedule)
 
     columns = format('', '8s')
     for i in range(0, max_tasks):
@@ -365,15 +358,15 @@ def print_no_time(bestSchedule):
     print('-----------------------------------------------------')
 
 
-def write_to_csv(best_score, bestSchedule, etc, machines, max_time):
+def write_to_csv(best_score, best_schedule, etc, machines, max_time):
     """
     Zapisywanie do pliku csv
     :param best_score: najlepszy wynik
-    :param bestSchedule: harmonogram dla najlepszego rozwiazania
+    :param best_schedule: harmonogram dla najlepszego rozwiazania
     :param etc: macierz etc
     """
-    max_tasks = get_max_tasks_number(bestSchedule)
-    tasks_of_machines = get_tasks_of_machines(bestSchedule)
+    max_tasks = get_max_tasks_number(best_schedule)
+    tasks_of_machines = get_tasks_of_machines(best_schedule)
 
     with open('results/output_pitt_direct.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_NONNUMERIC)
@@ -409,51 +402,51 @@ def write_to_csv(best_score, bestSchedule, etc, machines, max_time):
             writer.writerow(row)
 
 
-def scheduleTasks(numberOfIterations, populationSize):
-    if populationSize % 2 != 0:
+def schedule_tasks(number_of_iterations, population_size):
+    if population_size % 2 != 0:
         print("Population size should be even")
         return
     random.seed()
-    etcMatrix = Common.generate_etc_matrix(machines, tasks)
-    firstPopulation = generateFirstPopulation(len(machines), len(tasks), populationSize)
-    bestPopulation = firstPopulation
-    bestAdaptationRate, otherForBest = rateAdaptation(firstPopulation, etcMatrix, len(machines), machines)
+    etc_matrix = Common.generate_etc_matrix(machines, tasks)
+    first_population = generate_population(population_size)
+    best_population = first_population
+    best_adaptation_rate, other_for_best = rate_adaptation(first_population, etc_matrix, len(machines), machines)
     if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        print("Initial makespan value: " + "{0:.2f}".format(bestAdaptationRate) + " energy usage: " + "{0:.2f}".format(otherForBest))
+        print("Initial makespan value: " + "{0:.2f}".format(best_adaptation_rate) + " energy usage: " + "{0:.2f}".format(other_for_best))
     elif Common.scheduling_mode == Common.ENERGY_MODE:
-        print("Initial energy usage: " + "{0:.2f}".format(bestAdaptationRate) + " makespan: " + "{0:.2f}".format(otherForBest))
-    newPopulation = firstPopulation
-    for i in range(numberOfIterations):
-        newPopulation = iterateNextPopulation(newPopulation, len(machines))
-        adaptationRate, otherParam = rateAdaptation(newPopulation, etcMatrix, len(machines), machines)
-        if adaptationRate < bestAdaptationRate:
-            bestAdaptationRate = adaptationRate
-            bestPopulation = newPopulation
-            otherForBest = otherParam
+        print("Initial energy usage: " + "{0:.2f}".format(best_adaptation_rate) + " makespan: " + "{0:.2f}".format(other_for_best))
+    new_population = first_population
+    for i in range(number_of_iterations):
+        new_population = iterate_next_population(new_population, len(machines))
+        adaptation_rate, other_param = rate_adaptation(new_population, etc_matrix, len(machines), machines)
+        if adaptation_rate < best_adaptation_rate:
+            best_adaptation_rate = adaptation_rate
+            best_population = new_population
+            other_for_best = other_param
             if Common.scheduling_mode == Common.MAKESPAN_MODE:
-                print("New best makespan value(iteration " + str(i) + "): " + "{0:.2f}".format(bestAdaptationRate) + " energy usage: " + "{0:.2f}".format(otherForBest))
+                print("New best makespan value(iteration " + str(i) + "): " + "{0:.2f}".format(best_adaptation_rate) + " energy usage: " + "{0:.2f}".format(other_for_best))
             elif Common.scheduling_mode == Common.ENERGY_MODE:
-                print("New best energy usage(iteration " + str(i) + "): " + "{0:.2f}".format(bestAdaptationRate) + " makespan: " + "{0:.2f}".format(otherForBest))
-        if shouldStopIterations():
+                print("New best energy usage(iteration " + str(i) + "): " + "{0:.2f}".format(best_adaptation_rate) + " makespan: " + "{0:.2f}".format(other_for_best))
+        if should_stop_iterations():
             break
-    bestSchedule = getBestScheduleFromPopulation(bestPopulation, etcMatrix, len(machines))
-    saveResultsToFile("results/results_pitt_direct.csv", bestAdaptationRate, bestSchedule, len(machines), etcMatrix)
+    best_schedule = get_best_schedule_from_population(best_population, etc_matrix, len(machines))
+    save_results_to_file("results/results_pitt_direct.csv", best_adaptation_rate, best_schedule, len(machines), etc_matrix)
     if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        print("Best makespan value: " + "{0:.2f}".format(bestAdaptationRate) + " energy usage: " + "{0:.2f}".format(otherForBest))
+        print("Best makespan value: " + "{0:.2f}".format(best_adaptation_rate) + " energy usage: " + "{0:.2f}".format(other_for_best))
     elif Common.scheduling_mode == Common.ENERGY_MODE:
-        print("Best energy usage: " + "{0:.2f}".format(bestAdaptationRate) + " makespan: " + "{0:.2f}".format(otherForBest))
-    open('results/result_pitt_direct', 'a').write(str(bestAdaptationRate) + "," + str(otherForBest) + "\n")
+        print("Best energy usage: " + "{0:.2f}".format(best_adaptation_rate) + " makespan: " + "{0:.2f}".format(other_for_best))
+    open('results/result_pitt_direct', 'a').write(str(best_adaptation_rate) + "," + str(other_for_best) + "\n")
 
     if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        maxTime = bestAdaptationRate
+        max_time = best_adaptation_rate
     elif Common.scheduling_mode == Common.ENERGY_MODE:
-        maxTime = otherForBest
-    pretty_print(bestSchedule, etcMatrix, machines, maxTime)
-    write_to_csv(bestAdaptationRate, bestSchedule, etcMatrix, machines, maxTime)
+        max_time = other_for_best
+    pretty_print(best_schedule, etc_matrix, machines, max_time)
+    write_to_csv(best_adaptation_rate, best_schedule, etc_matrix, machines, max_time)
 
 
 def main():
-    # scheduleTasks(ITERATIONS_NUMBER, POPULATION_SIZE)
+    schedule_tasks(ITERATIONS_NUMBER, POPULATION_SIZE)
     security_features = Common.read_security_features()
 
 
