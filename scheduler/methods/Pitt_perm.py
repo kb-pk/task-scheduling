@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.utils import shuffle
 import random
 import math
-import Common
+import scheduler.Common as Common
 
 ITERATIONS_NUMBER = 100
 POPULATION_SIZE = 10
@@ -343,7 +343,7 @@ def partial_mapped_crossover(dad, mom):
     son_no_substr       = dad[:start] + dad[end:]
     for [d, m] in mappings:
         inx = daughter_no_substr.index(d)
-       daughter_no_substr[inx] = m
+        daughter_no_substr[inx] = m
 
         inx = son_no_substr.index(m)
         son_no_substr[inx] = d
