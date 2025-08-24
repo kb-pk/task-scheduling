@@ -1,5 +1,3 @@
-from numpy.f2py.auxfuncs import throw_error
-
 import scheduler.Common as Common
 import numpy as np
 
