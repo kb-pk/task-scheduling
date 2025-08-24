@@ -10,7 +10,7 @@ etc_matrix = Common.generate_etc_matrix(machines, tasks)
 tasks_num = len(tasks)
 machines_num = len(machines)
 
-DRAGONFLY_NUMBER = 10
+DRAGONFLY_NUMBER = 30
 ITERATIONS_NUMBER = 100
 # weights
 W_INERTIA = 0.9
