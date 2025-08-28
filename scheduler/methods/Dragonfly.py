@@ -82,7 +82,7 @@ def initialise():
     """
     Inicjalizuje populację początkową
 
-    :return: wektor prędkości, wektor pozycji, najlepszy osobnik z początkowej populacji, najgorszy, makespan najlepszego osobnika
+    :return: wektor prędkości, wektor pozycji, najlepszy osobnik z początkowej populacji, najgorszy, wartość funkcji przystosowania najlepszego osobnika
     """
     X = np.random.uniform(0, machines_num - 1, size=(DRAGONFLY_NUMBER, tasks_num))
     V = np.zeros_like(X)
@@ -104,7 +104,7 @@ def optimise(X, V, best_X, worst_X, best_val):
     :param V: initial velocity
     :param best_X: najlepszy osobnik z początkowej populacji
     :param worst_X: najgorszy osobnik z początkowej populacji
-    :param best_val: makespan najlepszego osobnika
+    :param best_val: wartość funkcji przystosowania najlepszego osobnika
     """
     for iteration in range(ITERATIONS_NUMBER):
         # Compute pairwise distances
