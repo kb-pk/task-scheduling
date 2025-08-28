@@ -18,6 +18,31 @@ W_VISION_STEP_SIZE = 5.0
 #   decode, get_entity_fitness, makespan and energy are copy-pasted from Dragonfly.py and should be moved to Common!
 #   (ideally using a diff branch, hence all this)
 
+description = {
+    "pl": """
+    Algorytm optymalizacyjny Fruitfly. Rodzaj algorytmu optymalizacyjnego particle swarm.
+    
+    Osobniki i przestrzeń poszukiwań konstruowane są tak samo, jak zostało przedstawione w opisie metody Dragonfly.
+    
+    Algorytm definiuje 2 fazy:
+    1. Szukanie zapachu (smell search), czyli znalezienie pozycji osobnika z najlepszą wartością funkcji przystosowania, 
+    2. Przemieszczenie się w stronę zapachu (vision search).
+    
+    Algorytm wykonuje te 2 fazy w pętli aż do osiągnięcia warunku końcowego.
+    """,
+    "en": """
+    Fruitfly optimisation algorithm. A type of particle swarm optimisation algorithm.
+    
+    Entities and the search space are constructed in the same way as is defined in the description of the Dragonfly method.
+    
+    The algorithm defines 2 phases:
+    1. Smell search -  finding the position of the entity with the best value of the fitness function,
+    2. Vision search - "flying" toward the position of the smell.
+    
+    The algorithm performs these 2 phases in a loop until a stop condition is reached.
+    """
+}
+
 
 def decode(position_vector):
     assign = np.rint(position_vector).astype(int)
