@@ -41,7 +41,6 @@ def makespan(position_vector):
     :param position_vector: chromosom (wektor pozycji)
     :return: makespan (skalar)
     """
-    """Compute makespan of a schedule given by 'position_vector'."""
     assign = decode(position_vector)
     loads = [etc_matrix[assign == j, j].sum() for j in range(machines_num)]
     return max(loads)
