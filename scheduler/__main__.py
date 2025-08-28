@@ -1,6 +1,7 @@
 from .methods import Michigan
 from .methods import Pitt_direct
 from .methods import Pitt_perm
+from .methods import Dragonfly
 from . import Common
 from . import Utils
 
@@ -17,10 +18,13 @@ def choices(x):
         Michigan.main(),
         time.sleep(1)
     elif x == 4:
-        Common.scheduling_mode = Common.ENERGY_MODE if Common.scheduling_mode == Common.MAKESPAN_MODE else Common.MAKESPAN_MODE
+        Dragonfly.main(),
+        time.sleep(1)
     elif x == 5:
-        Common.output_mode = (Common.output_mode + 1) % len(Common.output_modes)
+        Common.scheduling_mode = Common.ENERGY_MODE if Common.scheduling_mode == Common.MAKESPAN_MODE else Common.MAKESPAN_MODE
     elif x == 6:
+        Common.output_mode = (Common.output_mode + 1) % len(Common.output_modes)
+    elif x == 7:
         exit()
     else:
         print('Wrong choice')
@@ -35,9 +39,10 @@ def main():
                 "1. Permutation-based Pitt algorithm\n"
                 "2. Direct Pitt algorithm\n"
                 "3. Michigan algorithm\n"
-                "4. Switch scheduling mode (current mode: " + Common.scheduling_modes[Common.scheduling_mode] + ")\n" +
-                "5. Switch output mode (current mode: " + Common.output_modes[Common.output_mode] + ")\n" +
-                "6. Exit program\n"))
+                "4. Dragonfly algorithm\n"
+                "5. Switch scheduling mode (current mode: " + Common.scheduling_modes[Common.scheduling_mode] + ")\n" +
+                "6. Switch output mode (current mode: " + Common.output_modes[Common.output_mode] + ")\n" +
+                "7. Exit program\n"))
             choices(userInput)
         except ValueError:
             print("Please enter a valid number.")
