@@ -21,6 +21,36 @@ POPULATION_SIZE = 10
 NUMBER_OF_CROSSOVER_POINTS = 1
 MUTATION_POSSIBILITY = 0.01
 
+description = {
+    "pl": """
+    Algorytm oparty o podejście Pitt, reprezentacja bezpośrednia.
+        
+    Osobnik - reprezentacja konkretnego harmonogramu zadań dla wszystkich maszyn. Składa się z 1 chromosomu.
+    Chromosom - harmonogram zadań dla wszystkich maszyn. Składa się z N (liczba zadań) genów.
+    Gen - reprezentacja maszyny (machine_id). Indeks genu w chromosomie to numer zadania przypisanego do maszyny. Geny mogą powtarzać się w chromosomie.
+    
+    Selekcja - brak selekcji pomiędzy epokami.
+    
+    Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
+    
+    Mutacja - losowanie nowej wartości genu (machine_id) wewnątrz chromosomu.
+    """,
+
+    "en": """
+    Algorithm based on the Pitt approach, direct representation.
+    
+    Entity - a representation of a particular schedule of tasks for all machines. Made up of 1 chromosome.
+    Chromosome - a particular schedule of tasks for all machines. Made up of N (task number) genes.
+    Gene - a representation of a machine (machine_id). The index of a gene in a chromosome is a number of a task that's assigned to this machine. Genes can repeat in the chromosome.
+    
+    Selection - no selection between epochs.
+    
+    Crossover - n-point, every entity takes part.
+    
+    Mutation - a gene's value (machine_id) is replaced with a new, randomly generated one.
+    """
+}
+
 """
 Wczytuje dane dotyczace maszyn i zadan z plikow
 """

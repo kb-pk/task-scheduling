@@ -9,6 +9,36 @@ import scheduler.Common as Common
 
 columns = ''
 
+description = {
+    "pl": """
+    Algorytm oparty o podejście Michigan.
+    
+    Osobnik - reprezentacja pojedynczej maszyny z pakietu maszyn. Składa się z 1 chromosomu.
+    Chromosom - reprezentacja przypisanego do osobnika (maszyny) zestawu zadań.
+    Gen - reprezentacja pojedynczego zadania z pakietu zadań. 
+
+    Selekcja - brak selekcji pomiędzy epokami.
+    
+    Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
+    
+    Mutacja - mieszanie (shuffle) genów (zadań) w chromosomie.
+    """,
+
+    "en": """
+    Algorithm based on the Michigan approach.
+    
+    Entity - a representation of a single machine from the machine array. Made up of 1 chromosome.
+    Chromosome - a representation of the tasks assigned to the entity (machine).
+    Gene - a representation of a single task from the task array.
+    
+    Selection - no selection between epochs.
+    
+    Crossover - n-point, every entity takes part.
+    
+    Mutation - shuffling of genees (tasks) within a chromosome.
+    """
+}
+
 
 def get_last_task_index(chromosome):
     """
