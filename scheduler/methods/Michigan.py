@@ -4,6 +4,7 @@ from random import randint
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
+import scheduler.Utils as Utils
 
 import scheduler.Common as Common
 
@@ -443,43 +444,40 @@ def write_to_csv(best_score, population, etc, machines, max_time):
 
 
 def main():
-    np.random.seed(0)  # ustawienie ziarna
+    np.random.seed(0)
 
-    # wczytanie cech bezpieczeństwa
     features = Common.read_security_features()
-
-    # wczytanie danych z plikow
     machines = Common.read_machines(features)
     tasks = Common.read_tasks(features)
 
-    # wyznaczenie nazw kolumn w harmonogramie zadan
     global columns
     columns = ['task_' + str(i) for i in range(0, len(tasks))]
 
-    # machines = pd.DataFrame(data=[[0, 1], [1, 1], [2, 1], [3, 1]])
-    # print(machines)
-    # tasks = pd.DataFrame(data=[[0, 1], [1, 2], [2, 3], [3, 4],
-    #                            [4, 5], [5, 6], [6, 7], [7, 8],
-    # [8, 9], [9, 10], [10, 11], [11, 12]])
-
-    # generacja macierzy etc
     etc = Common.generate_etc_matrix(machines, tasks)
 
-    # wykonanie algorytmu genetycznego
-    pop, best_score, other_param = alg(machines, tasks, 100, 0.01, etc)  # 1% mutation chance
+    # uruchom algorytm
+    best_pop, best_score, other_param = alg(machines, tasks, 100, 0.01, etc)
 
-    # wypisanie wyniku
-    # print_no_time(pop, etc)
-
+    # mapowanie metryk na (makespan, energy)
     if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        max_time = best_score
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
+        max_time = best_score          # makespan
+        total_energy = other_param     # energia
+    else:  # ENERGY_MODE
         max_time = other_param
-    # wypisanie wyniku
-    pretty_print(pop, etc, machines, max_time)
+        total_energy = best_score
 
-    # zapis wyniku do pliku csv
-    write_to_csv(best_score, pop.sort_index(), etc, machines, max_time)
+    # zbuduj schedule_map (machine_id -> lista task_id)
+    schedule_map = {m_id: [] for m_id in best_pop.index.values}
+    for machine_id in best_pop.index.values:
+        for task_id in best_pop.loc[machine_id].values:
+            if not np.isnan(task_id):
+                schedule_map[machine_id].append(int(task_id))
+
+    # wyświetlenie zunifikowane (Utils.display_results już rysuje wykres jeśli w niej wywołujesz plot_gantt_chart)
+    Utils.display_results(schedule_map, etc, machines, max_time, total_energy)
+
+# zapis CSV (używamy posortowanej populacji – best_pop już posortowany)
+    write_to_csv(best_score, best_pop.sort_index(), etc, machines, max_time)
 
     open('results/result_michigan', 'a').write(str(best_score) + "," + str(other_param) + "\n")
 
