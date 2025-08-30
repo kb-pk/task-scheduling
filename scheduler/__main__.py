@@ -2,10 +2,18 @@ from .methods import Michigan
 from .methods import Pitt_direct
 from .methods import Pitt_perm
 from .methods import Dragonfly
+from .methods.BaseMethod import BaseMethod
 from . import Common
-from . import Utils
 
 import time
+from typing import Optional, Type
+
+current_algorithm: Optional[BaseMethod] = None  # "wskaznik" na bieżący obiekt algorytmu
+
+def run_algorithm(alg_cls: Type[BaseMethod], **kwargs):
+    global current_algorithm
+    current_algorithm = alg_cls(**kwargs)
+    current_algorithm.run()
 
 def choices(x):
     if x == 1:
@@ -15,7 +23,7 @@ def choices(x):
         Pitt_direct.main(),
         time.sleep(1)
     elif x == 3:
-        Michigan.main(),
+        run_algorithm(Michigan.MichiganMethod, iterations=100, pm=0.01, show_chart=True)
         time.sleep(1)
     elif x == 4:
         Dragonfly.main(),
@@ -32,7 +40,7 @@ def choices(x):
 
 
 def main():
-    Utils.prepare_results_directory()
+    Common.prepare_results_directory()
     while True:
         try:
             userInput = int(input("Which algorithm would you like to use?\n"

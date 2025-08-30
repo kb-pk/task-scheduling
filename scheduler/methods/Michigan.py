@@ -1,518 +1,315 @@
 import csv
 from random import randint
-
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
 
+from .BaseMethod import BaseMethod
+from .BaseMethod import Lang
 import scheduler.Common as Common
 
-columns = ''
+class MichiganMethod(BaseMethod):
+    """
+    Implementacja algorytmu w podejściu Michigan.
+    Reprezentacja:
+      - Wiersz DataFrame = jedna maszyna (osobnik).
+      - Kolumny = kolejne pozycje (sloty) zadań; brak zadania oznaczony NaN.
+    Operatory:
+      - Krzyżowanie: wymiana ogonów między parami maszyn (top vs bottom).
+      - Mutacja: tasowanie (shuffle) fragmentu chromosomu do pierwszego NaN.
+    Ocena:
+      - Obliczane czasy pracy (busy) każdej maszyny.
+      - Makespan = max busy.
+      - Energia = suma (busy*P_busy + idle*P_idle).
+      - W zależności od trybu (makespan / energy) sortowana jest populacja.
+    """
+    def __init__(self, iterations=100, pm=0.01, show_chart=True):
+        """
+        Inicjalizacja obiektu algorytmu.
+        :param iterations: liczba epok optymalizacji
+        :param pm: prawdopodobieństwo mutacji chromosomu
+        :param show_chart: czy rysować wykres Gantta
+        """
+        super().__init__(show_chart=show_chart)
+        self.iterations = iterations
+        self.pm = pm
+        self.population = None         # bieżąca populacja (DataFrame)
+        self.best_population = None    # najlepsza znaleziona populacja (DataFrame)
+        self.best_score = None         # wartość optymalizowanej metryki (lower = better)
+        self.other_score = None        # druga metryka (informacyjnie)
 
-description = {
-    "pl": """
-    Algorytm oparty o podejście Michigan.
+    def get_method_name(self):
+        """
+        Zwraca unikalną nazwę metody (używana w plikach wynikowych).
+        """
+        return "michigan"
+
+    def get_method_description(self, lang: Lang):
+        """
+        Opis tekstowy algorytmu w wybranym języku.
+        :param lang: Lang.PL lub Lang.EN
+        :return: opis (str)
+        """
+        if lang == Lang.PL:
+            return """
+                Algorytm oparty o podejście Michigan.
+                
+                Osobnik - reprezentacja pojedynczej maszyny z pakietu maszyn. Składa się z 1 chromosomu.
+                Chromosom - reprezentacja przypisanego do osobnika (maszyny) zestawu zadań.
+                Gen - reprezentacja pojedynczego zadania z pakietu zadań. 
+
+                Selekcja - brak selekcji pomiędzy epokami.
+                
+                Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
+                
+                Mutacja - mieszanie (shuffle) genów (zadań) w chromosomie.
+                """.strip()
+        elif lang == Lang.EN:
+            return """
+                Algorithm based on the Michigan approach.
+                
+                Entity - a representation of a single machine from the machine array (one chromosome).
+                Chromosome - tasks assigned to the entity (machine).
+                Gene - a single task index.
+                
+                Selection - none between epochs.
+                
+                Crossover - n-point, every entity participates.
+                
+                Mutation - shuffling of genes (tasks) inside the chromosome.
+                """.strip()
+
+    def initialize(self):
+        """
+        Buduje populację początkową oraz wyznacza jej ocenę,
+        ustawiając wartości najlepsze na starcie.
+        """
+        self.population = self._generate_population(self.machines.index.values, self.tasks.index.values)
+        self.population, self.best_score, self.other_score = self._sort_population(self.population)
+        self.best_population = self.population.copy()
+
+    def optimize(self):
+        """
+        Pętla główna optymalizacji:
+          1. Krzyżowanie populacji.
+          2. Mutacja wyników.
+          3. Ocena (sortowanie) nowej populacji.
+          4. Aktualizacja najlepszego rozwiązania.
+        """
+        for _ in range(self.iterations):
+            crossed = self._cross(self.population)
+            mutated = self._mutation(crossed, self.pm)
+            mutated, current_score, other = self._sort_population(mutated)
+            if current_score < self.best_score:
+                self.best_population = mutated.copy()
+                self.best_score = current_score
+                self.other_score = other
+            self.population = mutated
     
-    Osobnik - reprezentacja pojedynczej maszyny z pakietu maszyn. Składa się z 1 chromosomu.
-    Chromosom - reprezentacja przypisanego do osobnika (maszyny) zestawu zadań.
-    Gen - reprezentacja pojedynczego zadania z pakietu zadań. 
-
-    Selekcja - brak selekcji pomiędzy epokami.
-    
-    Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
-    
-    Mutacja - mieszanie (shuffle) genów (zadań) w chromosomie.
-    """,
-
-    "en": """
-    Algorithm based on the Michigan approach.
-    
-    Entity - a representation of a single machine from the machine array. Made up of 1 chromosome.
-    Chromosome - a representation of the tasks assigned to the entity (machine).
-    Gene - a representation of a single task from the task array.
-    
-    Selection - no selection between epochs.
-    
-    Crossover - n-point, every entity takes part.
-    
-    Mutation - shuffling of genees (tasks) within a chromosome.
-    """
-}
-
-
-def get_last_task_index(chromosome):
-    """
-    Chromosom zawiera indeksy zadan oraz wartosci np.nan uzupelniajace tablice do konca.
-    Funkcja szuka indeksu ostatniego zadania w chromosomie.
-
-    :param chromosome: tablica indeksow zadan
-    :return:
-    """
-    for task_id in range(0, len(chromosome)):
-        if np.isnan(chromosome[task_id]):
-            return task_id - 1
-
-    return len(chromosome) - 1
-
-
-def shuffle_chromosome(chromosome):
-    """
-    Mieszanie zadan w chromosomie
-
-    :param chromosome: tablica indeksow zadan
-    """
-    last_index = get_last_task_index(chromosome)  # pobranie indeksu ostatniego zadania w chromosomie
-    np.random.shuffle(chromosome[:last_index + 1])  # pomieszanie zadań w chromosomie (w zadanym zakresie)
-
-
-def calculate_time_on_machine(tasks_ids, machine_id, etc):
-    """
-    Oblicza czas wykonania wszystkich zadan na okreslonej maszynie
-
-    :param tasks_ids: tablica identyfikatorow zadan
-    :param machine_id: identyfikator maszyny
-    :param etc: macierz etc
-    :return: identyfikator maszyny, czas wykonania wszystkich zadan na maszynie
-    """
-    time_sum = 0.0
-    for task_id in tasks_ids:
-        if np.isnan(task_id):
-            break
-        time_sum += etc[int(task_id)][int(machine_id)]  # sumowanie czasu wykonania zadań dla danej maszyny
-
-    return machine_id, time_sum
-
-
-def calculate_times(population, etc):
-    """
-    Oblicza czasy wykonania zadan na maszynach, do ktorych zostaly przypisane
-
-    :param population: maszyny z przypisanymy do nich zadaniami (identyfikatorami zadan)
-    :param etc: macierz etc
-    :return: tablica czasow wykonania zadan na maszynach, do ktorych zostaly przypisane
-    """
-    tmp = np.zeros(shape=(len(population), 2), dtype=np.float64)
-
-    for machine_id in population.index.values:  # obliczenie czasu wykonania zadań dla wszystkich maszyn
-        tmp[machine_id] = calculate_time_on_machine(population.iloc[machine_id].values, machine_id, etc)
-
-    return tmp
-
-
-def numpy_arr_to_dataframe(data, ids):
-    """
-    Zamienia ndarray na dataframe
-
-    :param data: tablica ndarray do zamiany
-    :param ids: indeksy wierszy
-    :return: dataframe powstaly z tablicy ndarray
-    """
-    df = pd.DataFrame(data=data, index=ids, columns=columns)
-    df.index.name = 'machines'
-    return df
-
-def calculate_idle_time(tmp, max_time_running, population_size):
-    new_tmp = np.zeros(shape=(population_size, 2), dtype=np.float64)
-    for i in range(len(tmp)):
-        new_tmp[i][0] = tmp[i][0]
-        new_tmp[i][1] = max_time_running - tmp[i][1]
-    return new_tmp
-
-def sort_population(population, etc, machines = None):
-    """
-    Sortuje liste maszyn ( oraz zadan do nich przypisanych) od maszyny wykonujacej wszystkie swoje zadania najszybciej
-    do maszyny wykonuacej swoje zadania najwolniej
-
-    :param population:  maszyny z przypisanymy do nich zadaniami (identyfikatorami zadan)
-    :param etc: macierz etc
-    :return: posortowana populacja, najwyzszy czas wykonania zadan w populacji
-    """
-    tmp = calculate_times(population, etc)  # obliczenie czasu wykonania zadań dla populacji
-    
-    tmp_sorted = tmp[tmp[:, 1].argsort()]  # posortowanie czasów od najmniejszych do największych
-    mat_sort_ids = None
-    
-    best_fitness = tmp_sorted[:, 1][-1]  # wyszukanie największego czasu
-
-
-    max_time_running = best_fitness
-    idle_times_on_mach = calculate_idle_time(tmp, max_time_running, len(population))
-
-    tmp_energy = np.zeros(shape=(len(population), 2), dtype=np.float64)
-
-    for machine_idle_time in idle_times_on_mach:
-        tmp_energy[int(machine_idle_time[0])][0] = int(machine_idle_time[0])
-        tmp_energy[int(machine_idle_time[0])][1] = machines.values[int(machine_idle_time[0])][3] * machine_idle_time[1]
-    
-    for machine_busy_time in tmp:
-        tmp_energy[int(machine_busy_time[0])][1] = tmp_energy[int(machine_busy_time[0])][1] + machines.values[int(machine_busy_time[0])][2] * machine_busy_time[1]
-
-    tmp_energy_sorted = tmp_energy[tmp_energy[:, 1].argsort()]
-    if Common.scheduling_mode == Common.ENERGY_MODE:
-        mat_sort_ids = tmp_energy_sorted[:, 0].astype(int)
-        other_param = best_fitness
-        best_fitness = tmp_energy_sorted[:, 1][-1]
-    elif Common.scheduling_mode == Common.MAKESPAN_MODE:
-        mat_sort_ids = tmp_sorted[:, 0].astype(int)
-        other_param = tmp_energy_sorted[:, 1][-1]
-
-    sorted_population_df = numpy_arr_to_dataframe(population.values[mat_sort_ids], mat_sort_ids)  # konwersja do data frame
-
-    return sorted_population_df, best_fitness, other_param
-
-
-def split_population(population):
-    """
-    Dzieli populacje na dwie czesci i miesza maszyny (z ich zadaniami) w obrebie tych czesci
-    :param population:
-    :return:
-    """
-    parts = np.array_split(population, 2)  # podział populacji na pół
-    top = shuffle(parts[0])  # przemieszanie maszyn w pierwszej czesci
-    bottom = shuffle(parts[1])  # przemieszanie maszyn w drugiej czesci
-
-    return top, bottom
-
-
-def cross(population):
-    """
-    Krzyzowanie osobnikow w populacji
-
-    :param population:  maszyny z przypisanymy do nich zadaniami (identyfikatorami zadan)
-    :return: populacja po krzyzowaniu
-    """
-    # pobranie zbioru maszyn o najmniejszych czasach wykonania zadan (top)
-    # oraz o najwiekszych czasach wykonania zadan bottom
-    top, bottom = split_population(population)
-
-    for i in range((len(population) + 1) // 2):  # krzyzowanie par
-        cross_pair(top.values[i], bottom.values[i])  # krzyżowanie danej pary
-
-    data = np.concatenate((top, bottom), axis=0)  # łączenie dwoch zbiorow maszyn (top,bottom) po krzyzowaniu
-
-    # wyznaczenie indeksow kolumn do trasformacji na dataframe
-    indexes = np.concatenate((top.index.values, bottom.index.values), axis=0)
-    res = numpy_arr_to_dataframe(data, indexes)  # transformacja danych do dataframe
-
-    return res
-
-
-def cross_pair(first, second):
-    """
-    Krzyzowanie pary chromosomow (dwoch maszyn)
-
-    :param first: pierwsza maszyna (zestaw indeksow zadan dla maszyny)
-    :param second: druga maszyna (zestaw indeksow zadan dla maszyny)
-    """
-    # pobranie rozmiarow chromosomow
-    size_first = get_last_task_index(first) + 1
-    size_second = get_last_task_index(second) + 1
-
-    # wylosowanie punktów podziału
-    cross_point_first = randint(1, size_first)
-    cross_point_second = randint(1, size_second)
-
-    # krzyżowanie według punktów podziału
-    tmp_first = np.concatenate((first[:cross_point_first], second[cross_point_second:size_second]), axis=0)
-    tmp_second = np.concatenate((second[:cross_point_second], first[cross_point_first:size_first]), axis=0)
-
-    # nadpisanie skrzyżowanych osobników
-    first[:len(tmp_first)] = tmp_first
-    first[len(tmp_first): len(first)] = np.nan
-
-    # nadpisanie skrzyżowanych osobników
-    second[:len(tmp_second)] = tmp_second
-    second[len(tmp_second): len(second)] = np.nan
-
-
-def generate_population(machines, tasks):
-    """
-    Populacja sklada sie z chromosomow.
-    Jeden chromosom to jedna maszyna.
-    Kazdy chromosom to lista indeksow zadan, ktore maja byc wykonane na maszynie.
-    Funkcja generuje populacje poczatkowa.
-
-    :param machines: tablica maszyn
-    :param tasks: tablica zadan
-    :return: populacja -> maszyny z przypisanymy do nich zadaniami (identyfikatorami zadan)
-    """
-
-    if len(machines) > len(tasks):
-        raise Exception('Each machine have to have at least one task')
-
-    tasks_cpy = tasks.copy()
-    np.random.shuffle(tasks_cpy)  # wymieszanie zadań
-
-    tasks_arr = np.zeros((len(machines), len(tasks_cpy)))  # utworzenie pustej tablicy
-    tasks_arr.fill(np.nan)  # wypelnienie tablicy wartosciami np.nan
-
-    j = -1
-    for i in range(0, len(tasks_cpy)):
-        machine = i % len(machines)
-        if machine == 0:
-            j += 1
-
-        tasks_arr[machine][j] = tasks_cpy[i]
-
-    tasks_arr = numpy_arr_to_dataframe(tasks_arr, machines)  # konwersja na typ data frame
-
-    return tasks_arr
-
-
-def selection(population):
-    """
-    Operacja selekcji
-
-    :param population: populacja przed selekcja
-    :return: populacja po selekcji
-    """
-    return population
-
-
-def mutation(population, pm):
-    """
-    Mutacja - przemieszanie kolejnosci zadan w obrebie maszyny
-
-    :param population: populacja -> maszyny z przypisanymy do nich zadaniami (identyfikatorami zadan)
-    :param pm: szansa na mutacje
-    :return: populacja po mutacji
-    """
-    for machine_id in population.index:  # iteracja po maszynach
-        if np.random.uniform(0.0, 1.0) <= pm:  # wykonanie mutacji z okreslonym prawdopodobienstwem
-            shuffle_chromosome(population.loc[machine_id].values)  # zamiana kolejności zadań dla maszyny
-
-    return population
-
-
-def alg(machines, tasks, epochs, pm, etc):
-    """
-    Algorytm genetyczny
-    :param machines: tablica maszyn
-    :param tasks: tablica zadan
-    :param epochs: liczba epok
-    :param pm: prawdopodobienstwo mutacji
-    :param etc: macierz etc
-    :return: najlepsza populacja i osiagniety dla niej czas
-    """
-    # generacja populacji poczatkowej
-    pop = generate_population(machines=machines.index.values, tasks=tasks.index.values)
-    # mutacja
-    # mutated = mutation(pop, pm)
-    # sortowanie populacji i wyznaczanie czasu jej wykonania
-    sorted_pop, current_score, other_param = sort_population(pop, etc, machines)
-
-    if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        print("Makespan beginning: ", current_score, "energy use:", other_param)
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
-        print("Energy beginning: ", current_score, "makespan:", other_param)
-    best_score = current_score
-    other_param_for_best = other_param
-    best_pop = sorted_pop
-    best_iter = 0
-
-    for i in range(epochs):
-        cros = cross(sorted_pop)  # krzyzowanie
-        mutated = mutation(cros, pm)  # mutacja
-        # sortowanie populacji i wyznaczanie czasu jej wykonania
-        sorted_pop, current_score, other_param = sort_population(mutated, etc, machines)
-        if current_score < best_score:  # sprawdzenie czy uzyskano lepsze rozwiazanie
-            best_pop = sorted_pop
-            best_score = current_score
-            best_iter = i
-            other_param_for_best = other_param
-            if Common.scheduling_mode == Common.MAKESPAN_MODE:
-                print("[", i, "] Current best makespan: ", best_score, "energy use:", other_param_for_best)
-            elif Common.scheduling_mode == Common.ENERGY_MODE:
-                print("[", i, "] Current best energy: ", best_score, "makespan:", other_param_for_best)
-        sorted_pop = selection(sorted_pop)  # selekcja
-
-    if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        print("Makespan optimized: ", best_score, " in iter nb. ", best_iter, "energy use:", other_param_for_best)
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
-        print("Makespan optimized: ", best_score, " in iter nb. ", best_iter, "energy use:", other_param_for_best)
-    return (best_pop, best_score, other_param_for_best)
-
-
-def pretty_print(population, etc, machines, max_time):
-    """
-    Wypisywanie harmonogramu zadan (populacji) wraz z czasami wykonania zadan.
-
-    :param population:
-    :param etc:
-    """
-    print('-----------------------------------------------------')
-    max_tasks = 0
-    for i in range(0, len(population)):  # pobieranie maksymalnej liczby zadan przypisanych do maszyn
-        max_tasks = max(get_last_task_index(population.values[i]), max_tasks)
-
-    columns = format('', '8s')  # formatowanie nazw kolumn
-    for i in range(0, max_tasks + 1):
-        columns += format(i, '13d')
-
-    if Common.output_mode == Common.ENERGY_O_MODE or Common.output_mode == Common.ALL_O_MODE:
-        columns += " IDLE "
-
-    print('\t\ttasks')
-    print(columns)
-    print('machines')
-
-    sorted_pop = population.sort_index()
-
-    for machine_id in sorted_pop.index.values:  # iteracja po maszynach
-        row = format(machine_id, '8d')
-
-        time_sum = 0.0
-        energy_sum = 0.0
-        for task_id in sorted_pop.loc[machine_id].values:  # iteracja po zadaniach przypisanych do maszyn
-            if np.isnan(task_id):
+    def get_best_solution(self):
+        """
+        Zwraca najlepszą aktualnie populację (po optymalizacji).
+        """
+        return self.best_population
+
+    def _generate_population(self, machines, tasks):
+        """
+        Tworzy populację początkową:
+          - Tasuje listę zadań.
+          - Rozdziela zadania „kolumnami” po maszynach (rundy przydziału).
+          - Wypełnia pozostałe komórki NaN.
+        :param machines: tablica identyfikatorów maszyn
+        :param tasks: tablica identyfikatorów zadań
+        :return: DataFrame populacji
+        :raises ValueError: gdy maszyn jest więcej niż zadań
+        """
+        if len(machines) > len(tasks):
+            raise Exception('Each machine must have at least one task')
+        tasks_cpy = tasks.copy()
+        np.random.shuffle(tasks_cpy)
+        arr = np.zeros((len(machines), len(tasks_cpy)))
+        arr.fill(np.nan)
+        col = -1
+        for i, t in enumerate(tasks_cpy):
+            m = i % len(machines)
+            if m == 0:
+                col += 1
+            arr[m][col] = t
+        return self._arr_to_df(arr, machines)
+
+    def _arr_to_df(self, data, ids):
+        """
+        Konwertuje macierz numpy na DataFrame o kolumnach task_i.
+        :param data: macierz (maszyny x sloty)
+        :param ids: indeksy wierszy (ID maszyn)
+        :return: DataFrame
+        """
+        cols = [f"task_{i}" for i in range(data.shape[1])]
+        df = pd.DataFrame(data=data, index=ids, columns=cols)
+        df.index.name = 'machines'
+        return df
+
+    @staticmethod
+    def _last_task_index(chrom):
+        """
+        Zwraca indeks ostatniego rzeczywistego zadania w chromosomie
+        (pozycja przed pierwszym NaN).
+        :param chrom: tablica z ID zadań i NaN
+        :return: indeks (int)
+        """
+        for i in range(len(chrom)):
+            if np.isnan(chrom[i]):
+                return i - 1
+        return len(chrom) - 1
+
+    def _mutation(self, population, pm):
+        """
+        Mutacja populacji:
+          - Dla każdej maszyny z prawdopodobieństwem pm tasuje prefix chromosomu.
+        :param population: DataFrame populacji
+        :param pm: prawdopodobieństwo mutacji
+        :return: zmutowana populacja (in-place)
+        """
+        for m_id in population.index:
+            if np.random.uniform(0.0, 1.0) <= pm:
+                chrom = population.loc[m_id].values
+                last = self._last_task_index(chrom)
+                if last > 0:
+                    np.random.shuffle(chrom[:last+1])
+        return population
+
+    def _cross_pair(self, first, second):
+        """
+        Krzyżuje dwa chromosomy (maszyny) przez wymianę segmentów ogonowych.
+        :param first: tablica (chromosom 1)
+        :param second: tablica (chromosom 2)
+        """
+        size_first = self._last_task_index(first) + 1
+        size_second = self._last_task_index(second) + 1
+        cp1 = randint(1, size_first) if size_first > 1 else 1
+        cp2 = randint(1, size_second) if size_second > 1 else 1
+        tmp_first = np.concatenate((first[:cp1], second[cp2:size_second]), axis=0)
+        tmp_second = np.concatenate((second[:cp2], first[cp1:size_first]), axis=0)
+        first[:len(tmp_first)] = tmp_first
+        first[len(tmp_first):] = np.nan
+        second[:len(tmp_second)] = tmp_second
+        second[len(tmp_second):] = np.nan
+
+    def _split_population(self, population):
+        """
+        Dzieli populację na dwie połowy (top, bottom) i tasuje kolejność w każdej.
+        :param population: DataFrame populacji
+        :return: (top_df, bottom_df)
+        """
+        parts = np.array_split(population, 2)
+        top = shuffle(parts[0])
+        bottom = shuffle(parts[1])
+        return top, bottom
+
+    def _cross(self, population):
+        """
+        Krzyżuje populację parami maszyn (z top i bottom).
+        :param population: DataFrame populacji
+        :return: nowa populacja po krzyżowaniu
+        """
+        top, bottom = self._split_population(population)
+        limit = (len(population) + 1) / 2
+        for i in range(int(limit)):
+            self._cross_pair(top.values[i], bottom.values[i])
+        return pd.concat([top, bottom], axis=0)
+
+    def _calc_times(self, population):
+        """
+        Buduje tablicę [machine_id, busy_time] dla każdej maszyny.
+        :param population: DataFrame populacji
+        :return: ndarray (N,2)
+        """
+        tmp = np.zeros(shape=(len(population), 2), dtype=np.float64)
+        for m_id in population.index.values:
+            tmp[m_id] = self._time_on_machine(population.iloc[m_id].values, m_id)
+        return tmp
+
+    def _time_on_machine(self, tasks_ids, machine_id):
+        """
+        Sumuje czasy ETC zadań przypisanych do danej maszyny.
+        :param tasks_ids: tablica ID zadań (z NaN jako wypełnieniem)
+        :param machine_id: ID maszyny
+        :return: (machine_id, suma_czasów)
+        """
+        s = 0.0
+        for t in tasks_ids:
+            if np.isnan(t):
                 break
-            time_sum += etc[int(task_id)][int(machine_id)]  # obliczanie sumy czasow wykonania zadan dla maszyny
-            energy = etc[int(task_id)][int(machine_id)] * machines.values[machine_id][2]
-            energy_sum += energy
-            # formatowanie wyjscia
-            if Common.output_mode == Common.MAKESPAN_O_MODE:
-                row += format(format(int(task_id), '5') + ' (' + format(round(etc[int(task_id)][int(machine_id)], 1), '5.1f') + ')','12s')
-            elif Common.output_mode == Common.ENERGY_O_MODE:
-                row += format(format(int(task_id), '5') + ' (' + format(round(energy, 1), '5.1f') + ')','12s')
-            elif Common.output_mode == Common.ALL_O_MODE:
-                row += format(format(int(task_id), '5') + ' (' + format(round(energy, 1), '5.1f') + ';' + format(round(etc[int(task_id)][int(machine_id)], 1), '5.1f') + ')','12s')
-            
-        idle_energy = (max_time - time_sum) * machines.values[machine_id][3]
-        if Common.output_mode == Common.MAKESPAN_O_MODE:
-            print(format(row, str((max_tasks + 1) * 14) + 's') + ' | ' + str(round(time_sum, 2)))
-        elif Common.output_mode == Common.ENERGY_O_MODE:
-            print(format(row, str((max_tasks + 1) * 14) + 's') + '(' + str(idle_energy) + ') | ' + str(round(energy_sum + idle_energy, 2)))
-        elif Common.output_mode == Common.ALL_O_MODE:
-            print(format(row, str((max_tasks + 1) * 14) + 's') + '(' + str(idle_energy) + ') | MAKESPAN: ' + str(round(time_sum, 2)) + ' | ENERGY: ' + str(round(energy_sum + idle_energy, 2)))
-    print('-----------------------------------------------------')
+            s += self.etc[int(t)][int(machine_id)]
+        return machine_id, s
 
+    def _idle_times(self, tmp, mk):
+        """
+        Wylicza tablicę bezczynności (idle_time = makespan - busy).
+        :param tmp: ndarray [machine_id, busy_time]
+        :param mk: makespan
+        :return: ndarray [machine_id, idle_time]
+        """
+        new_tmp = np.zeros_like(tmp)
+        for i in range(len(tmp)):
+            new_tmp[i][0] = tmp[i][0]
+            new_tmp[i][1] = mk - tmp[i][1]
+        return new_tmp
 
-def print_no_time(population, etc):
-    """
-    Wypisywanie harmonogramu zadan (populacji) bez czasow wykonania zadan.
+    def _sort_population(self, population):
+        """
+        Ocena i sortowanie populacji:
+          1. Oblicz busy_time i makespan.
+          2. Oblicz idle_time.
+          3. Oblicz energię (busy + idle).
+          4. W zależności od trybu (energy / makespan) wybierz ordering.
+          5. Zwróć posortowany DataFrame oraz (best_score, other_score).
+        :param population: DataFrame populacji
+        :return: (sorted_population_df, best_score, other_score)
+        """
+        tmp = self._calc_times(population)
+        tmp_sorted = tmp[tmp[:,1].argsort()]
+        mk = tmp_sorted[:,1][-1]
+        idle = self._idle_times(tmp, mk)
+        energy_arr = np.zeros_like(tmp)
+        # energia idle
+        for idle_row in idle:
+            mid = int(idle_row[0])
+            energy_arr[mid][0] = mid
+            energy_arr[mid][1] = self.machines.values[mid][3] * idle_row[1]
+        # energia busy
+        for busy_row in tmp:
+            mid = int(busy_row[0])
+            energy_arr[mid][1] += self.machines.values[mid][2] * busy_row[1]
+        energy_sorted = energy_arr[energy_arr[:,1].argsort()]
 
-    :param population:
-    :param etc:
-    """
-    print('-----------------------------------------------------')
-    max_tasks = 0
-    for i in range(0, len(population)):  # pobieranie maksymalnej liczby zadan przypisanych do maszyn
-        max_tasks = max(get_last_task_index(population.values[i]), max_tasks)
+        if Common.scheduling_mode == Common.ENERGY_MODE:
+            ordering_ids = energy_sorted[:,0].astype(int)
+            other = mk
+            best = energy_sorted[:,1][-1]
+        else:
+            ordering_ids = tmp_sorted[:,0].astype(int)
+            other = energy_sorted[:,1][-1]
+            best = mk
 
-    columns = format('', '8s')  # formatowanie nazw kolumn
-    for i in range(0, max_tasks + 1):
-        columns += format(i, '13d')
+        ordered_df = self._arr_to_df(population.values[ordering_ids], ordering_ids)
+        return ordered_df, best, other
 
-    print('\t\ttasks')
-    print(columns)
-    print('machines')
-
-    sorted_pop = population.sort_index()
-
-    for machine_id in sorted_pop.index.values:  # iteracja po maszynach
-        row = format(machine_id, '8d')
-
-        time_sum = 0.0
-        for task_id in sorted_pop.loc[machine_id].values:  # iteracja po zadaniach przypisanych do maszyn
-            if np.isnan(task_id):
-                break
-            time_sum += etc[int(task_id)][int(machine_id)]  # obliczanie sumy czasow wykonania zadan dla maszyny
-
-            # formatowanie wyjscia
-            row += format(
-                format(int(task_id), '13d'))
-
-        print(row)
-    print('-----------------------------------------------------')
-
-
-def write_to_csv(best_score, population, etc, machines, max_time):
-    """
-    Zapisywanie do pliku csv
-    :param best_score: najlepszy wynik
-    :param population: population
-    :param etc: macierz etc
-    """
-    with open('results/output_michigan.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_NONNUMERIC)
-        writer.writerow(['{} optimized'.format(Common.scheduling_modes[Common.scheduling_mode]), ('%f' % best_score).replace('.', ',')])
-        
-        first_row = ['Machines / Tasks']
-
-        max_tasks = 0
-        for i in range(0, len(population)):
-            max_tasks = max(get_last_task_index(population.values[i]), max_tasks)
-
-        for i in range(0, max_tasks + 1):
-            first_row.append(str(i))
-
-        if Common.output_mode == Common.ENERGY_O_MODE or Common.output_mode == Common.ALL_O_MODE:
-            first_row.append('IDLE')
-
-        writer.writerow(first_row)
-
-        for machine_id in population.index.values:  # iteracja po maszynach
-            row = [str(machine_id)]  # dodanie do wiersza id maszyny
-            time = 0.0
-            for task_id in population.loc[machine_id].values:  # iteracja po zadaniach przypisanych do maszyn
-                if np.isnan(task_id):
-                    break
-                if Common.output_mode == Common.MAKESPAN_O_MODE:
-                    row.append(str(str(int(task_id)) + ' (' + ('%.1f' % etc[int(task_id)][int(machine_id)]).replace('.', ',') + ')'))  # dodanie do wiersza task id i czasu wykonywania
-                elif Common.output_mode == Common.ENERGY_O_MODE:
-                    time += etc[int(task_id)][int(machine_id)]
-                    row.append(str(str(int(task_id)) + ' (' + (('%.1f' % (etc[int(task_id)][int(machine_id)] * machines.values[machine_id][2]))).replace('.', ',') + ')'))  
-                elif Common.output_mode == Common.ALL_O_MODE:
-                    time += etc[int(task_id)][int(machine_id)]
-                    row.append(str(str(int(task_id)) + ' (' + ('%.1f' % etc[int(task_id)][int(machine_id)]).replace('.', ',') + '|' + (('%.1f' % (etc[int(task_id)][int(machine_id)] * machines.values[machine_id][2]))).replace('.', ',') + ')'))
-
-            if Common.output_mode == Common.ENERGY_O_MODE or Common.output_mode == Common.ALL_O_MODE:
-                time = max_time - time
-                row.append(('%.1f' % time).replace('.', ',') + '|' + ('%.1f' % (time * machines.values[machine_id][3])).replace('.', ','))
-            writer.writerow(row)  # zapisanie calego wiesza
-
-
-def main():
-    np.random.seed(0)  # ustawienie ziarna
-
-    # wczytanie cech bezpieczeństwa
-    features = Common.read_security_features()
-
-    # wczytanie danych z plikow
-    machines = Common.read_machines(features)
-    tasks = Common.read_tasks(features)
-
-    # wyznaczenie nazw kolumn w harmonogramie zadan
-    global columns
-    columns = ['task_' + str(i) for i in range(0, len(tasks))]
-
-    # machines = pd.DataFrame(data=[[0, 1], [1, 1], [2, 1], [3, 1]])
-    # print(machines)
-    # tasks = pd.DataFrame(data=[[0, 1], [1, 2], [2, 3], [3, 4],
-    #                            [4, 5], [5, 6], [6, 7], [7, 8],
-    # [8, 9], [9, 10], [10, 11], [11, 12]])
-
-    # generacja macierzy etc
-    etc = Common.generate_etc_matrix(machines, tasks)
-
-    # wykonanie algorytmu genetycznego
-    pop, best_score, other_param = alg(machines, tasks, 100, 0.01, etc)  # 1% mutation chance
-
-    # wypisanie wyniku
-    # print_no_time(pop, etc)
-
-    if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        max_time = best_score
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
-        max_time = other_param
-    # wypisanie wyniku
-    pretty_print(pop, etc, machines, max_time)
-
-    # zapis wyniku do pliku csv
-    write_to_csv(best_score, pop.sort_index(), etc, machines, max_time)
-
-    open('results/result_michigan', 'a').write(str(best_score) + "," + str(other_param) + "\n")
-
+    def build_schedule_map(self, solution_df):
+        """
+        Konwersja najlepszej populacji (DataFrame) na mapę harmonogramu:
+          {machine_id: [task_id, ...]} z pominięciem NaN.
+        :param solution_df: DataFrame najlepszej populacji
+        :return: dict[int, list[int]]
+        """
+        schedule_map = {m_id: [] for m_id in solution_df.index.values}
+        for machine_id in solution_df.index.values:
+            for task_id in solution_df.loc[machine_id].values:
+                if not np.isnan(task_id):
+                    schedule_map[machine_id].append(int(task_id))
+        return schedule_map
+    
 
 if __name__ == "__main__":
-    main()
+    m = MichiganMethod(iterations=100, pm=0.01)
+    m.run()
