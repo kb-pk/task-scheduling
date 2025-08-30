@@ -164,6 +164,49 @@ def check_task_machine_mapping(machines, tasks, features, mappings):
 
     return True
 
+def decode_position_vector(position_vector, machines_num: int):
+    """
+    Zaokrąglenie i obcięcie wartości wektora pozycji do zakresu ID maszyn.
+    :param position_vector: ndarray float (długość = liczba zadań)
+    :param machines_num: liczba maszyn
+    :return: ndarray int (przypisanie task -> machine_id)
+    """
+    assign = np.rint(position_vector).astype(int)
+    return np.clip(assign, 0, machines_num - 1)
+
+
+def compute_schedule_metrics(position_vector, etc_matrix: np.ndarray, machines_df: pd.DataFrame):
+    """
+    Liczy (makespan, total_energy) dla zakodowanego harmonogramu reprezentowanego przez wektor pozycji.
+    :param position_vector: wektor (floats)
+    :param etc_matrix: macierz ETC (tasks x machines)
+    :param machines_df: DataFrame maszyn z kolumnami P_busy, P_idle
+    :return: (makespan, total_energy)
+    """
+    machines_num = etc_matrix.shape[1]
+    assign = decode_position_vector(position_vector, machines_num)
+    loads = [etc_matrix[assign == j, j].sum() for j in range(machines_num)]
+    makespan = max(loads) if loads else 0.0
+    p_busy = machines_df['P_busy'].values
+    p_idle = machines_df['P_idle'].values
+    loads_arr = np.array(loads, dtype=float)
+    total_energy = np.sum(loads_arr * p_busy + (makespan - loads_arr) * p_idle)
+    return makespan, total_energy
+
+
+def vector_fitness(position_vector, etc_matrix: np.ndarray, machines_df: pd.DataFrame, mode: int):
+    """
+    Zwraca (primary_metric, secondary_metric) zależnie od trybu (makespan / energy).
+    :param position_vector: wektor pozycji
+    :param etc_matrix: macierz ETC
+    :param machines_df: DataFrame maszyn
+    :param mode: MAKESPAN_MODE lub ENERGY_MODE
+    """
+    mk, en = compute_schedule_metrics(position_vector, etc_matrix, machines_df)
+    if mode == ENERGY_MODE:
+        return en, mk
+    return mk, en
+
 def print_schedule(schedule_map, etc, machines, makespan, total_energy):
     """
     Wyświetla wyniki harmonogramu (czas i/lub energię) w czytelnej formie.

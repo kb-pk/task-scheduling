@@ -55,6 +55,17 @@ class BaseMethod(ABC):
         """Konwersja solution -> {machine_id: [task_ids]}."""
         ...
 
+    def run(self):
+        self.initialize()
+        self.optimize()
+        solution = self.get_best_solution()
+        schedule_map = self.build_schedule_map(solution)
+        makespan, total_energy = self._compute_metrics(schedule_map)
+        Common.print_schedule(schedule_map, self.etc, self.machines, makespan, total_energy)
+        Common.plot_gantt_chart(schedule_map, self.etc, makespan)
+        self.write_results_csv(schedule_map, makespan, total_energy)
+        return makespan, total_energy
+    
     def _compute_metrics(self, schedule_map):
         machine_times = [0.0] * len(self.machines)
         for m_id, tasks in schedule_map.items():
@@ -68,17 +79,6 @@ class BaseMethod(ABC):
             total_energy += busy_e + idle_e
         return makespan, total_energy
 
-    def run(self):
-        self.initialize()
-        self.optimize()
-        solution = self.get_best_solution()
-        schedule_map = self.build_schedule_map(solution)
-        makespan, total_energy = self._compute_metrics(schedule_map)
-        Common.print_schedule(schedule_map, self.etc, self.machines, makespan, total_energy)
-        Common.plot_gantt_chart(schedule_map, self.etc, makespan)
-        self.write_results_csv(schedule_map, makespan, total_energy)
-        return makespan, total_energy
-    
     def _format_task_cell(self, task_id: int, machine_id: int) -> str:
         """
         Format pojedynczej komórki z zadaniem w CSV (i potencjalnie innych wyjściach).

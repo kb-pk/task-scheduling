@@ -1,22 +1,6 @@
-import scheduler.Common as Common
 import numpy as np
-
-features = Common.read_security_features()
-machines = Common.read_machines(features)
-tasks = Common.read_tasks(features)
-
-etc_matrix = Common.generate_etc_matrix(machines, tasks)
-
-tasks_num = len(tasks)
-machines_num = len(machines)
-
-POPULATION_SIZE = 30
-ITERATIONS_NUMBER = 100
-W_VISION_STEP_SIZE = 5.0
-
-# TODO
-#   decode, get_entity_fitness, makespan and energy are copy-pasted from Dragonfly.py and should be moved to Common!
-#   (ideally using a diff branch, hence all this)
+import scheduler.Common as Common
+from .BaseMethod import BaseMethod, Lang
 
 description = {
     "pl": """
@@ -44,107 +28,100 @@ description = {
 }
 
 
-def decode(position_vector):
-    assign = np.rint(position_vector).astype(int)
-    return np.clip(assign, 0, machines_num - 1)
-
-
-def get_entity_fitness(position_vector):
-    match Common.scheduling_mode:
-        case Common.MAKESPAN_MODE:
-            return makespan(position_vector)
-        case Common.ENERGY_MODE:
-            return energy(position_vector)
-
-    return None
-
-
-def makespan(position_vector):
+class FruitflyMethod(BaseMethod):
     """
-    Funkcja przystosowania, liczy makespan przyjmując position_vector
-
-    :param position_vector: chromosom (wektor pozycji)
-    :return: makespan (skalar)
+    Implementacja klasowa Fruitfly (dwufazowy: smell + vision) wykorzystująca wspólne utilsy.
     """
-    assign = decode(position_vector)
-    loads = [etc_matrix[assign == j, j].sum() for j in range(machines_num)]
-    return max(loads)
+    def __init__(self,
+                 iterations=100,
+                 population_size=30,
+                 vision_step=5.0,
+                 show_chart=True):
+        super().__init__(show_chart=show_chart)
+        self.iterations = iterations
+        self.population_size = population_size
+        self.vision_step = vision_step
+        self.population = None
+        self.best_pos = None
+        self.best_score = None
+        self.other_score = None
 
+    def get_method_name(self):
+        return "fruitfly"
 
-def energy(position_vector):
-    """
-    Funkcja przystosowania, liczy zużytą energię danego mapowania maszyn i zadań
+    def get_method_description(self, lang: Lang):
+        if lang == Lang.PL:
+            return ("""
+            Algorytm optymalizacyjny Fruitfly. Rodzaj algorytmu optymalizacyjnego particle swarm.
+            
+            Osobniki i przestrzeń poszukiwań konstruowane są tak samo, jak zostało przedstawione w opisie metody Dragonfly.
+            
+            Algorytm definiuje 2 fazy:
+            1. Szukanie zapachu (smell search), czyli znalezienie pozycji osobnika z najlepszą wartością funkcji przystosowania, 
+            2. Przemieszczenie się w stronę zapachu (vision search).
+            
+            Algorytm wykonuje te 2 fazy w pętli aż do osiągnięcia warunku końcowego.
+            """)
+        else:
+            return ("""
+            Fruitfly optimisation algorithm. A type of particle swarm optimisation algorithm.
+            
+            Entities and the search space are constructed in the same way as is defined in the description of the Dragonfly method.
+            
+            The algorithm defines 2 phases:
+            1. Smell search -  finding the position of the entity with the best value of the fitness function,
+            2. Vision search - "flying" toward the position of the smell.
+            
+            The algorithm performs these 2 phases in a loop until a stop condition is reached.
+            """)
 
-    :param position_vector: chromosom (wektor pozycji)
-    :return: energy (skalar)
-    """
-    assign = decode(position_vector)
-    loads = [etc_matrix[assign == j, j].sum() for j in range(machines_num)]
-    makespan_val = max(loads)
+    # --- lifecycle ---
+    def initialize(self):
+        tasks_num = len(self.tasks)
+        machines_num = len(self.machines)
+        self.population = np.random.uniform(0, machines_num - 1, size=(self.population_size, tasks_num))
+        fitness = np.array([Common.vector_fitness(x, self.etc, self.machines, Common.scheduling_mode)[0] for x in self.population])
+        idx = np.argmin(fitness)
+        self.best_pos = self.population[idx].copy()
+        self.best_score, self.other_score = Common.vector_fitness(self.best_pos, self.etc, self.machines, Common.scheduling_mode)
 
-    p_busy = machines['P_busy'].values
-    p_idle = machines['P_idle'].values
+    def optimize(self):
+        tasks_num = len(self.tasks)
+        machines_num = len(self.machines)
+        for it in range(self.iterations):
+            # Smell search
+            smell_vals = np.array([Common.vector_fitness(x, self.etc, self.machines, Common.scheduling_mode)[0] for x in self.population])
+            i_smell = np.argmin(smell_vals)
+            X_smell = self.population[i_smell].copy()
 
-    # Energy = (BusyTime * P_busy) + (IdleTime * P_idle)
-    # where IdleTime = Makespan - BusyTime (load)
-    total_energy = np.sum(loads * p_busy + (makespan_val - loads) * p_idle)
+            # Vision search
+            for i in range(self.population_size):
+                self.population[i] = X_smell + np.random.randn(tasks_num) * self.vision_step
+                self.population[i] = np.clip(self.population[i], 0, machines_num - 1)
+                main_val, other_val = Common.vector_fitness(self.population[i], self.etc, self.machines, Common.scheduling_mode)
+                if main_val < self.best_score:
+                    self.best_score = main_val
+                    self.other_score = other_val
+                    self.best_pos = self.population[i].copy()
+                    print(f"[{it}] new best {Common.scheduling_modes[Common.scheduling_mode]}: {self.best_score:.4f}")
 
-    return total_energy
+    def get_best_solution(self):
+        return self.best_pos
 
+    def build_schedule_map(self, position_vector):
+        assign = Common.decode_position_vector(position_vector, len(self.machines))
+        schedule_map = {m: [] for m in self.machines.index.values}
+        for task_id, m_id in enumerate(assign):
+            schedule_map[int(m_id)].append(task_id)
+        return schedule_map
 
-def initialise():
-    """
-    Inicjuje populację początkową
-
-    :return: wektor populacji początkowej
-    """
-    return np.random.uniform(0, machines_num - 1, size=(POPULATION_SIZE, tasks_num))
-
-
-def optimise(init_population):
-    """
-    Optymalizuje populację początkową
-
-    :param init_population: populacja początkowa
-
-    :return: pozycję i wartość funkcji przystosowania (fitness) najlepszego osobnika
-    """
-    global_best_pos = None
-    global_best_val = np.inf
-
-    for iteration in range(ITERATIONS_NUMBER):
-        # smell search
-        smell_vals = np.array([get_entity_fitness(x) for x in init_population])
-        i_smell = np.argmin(smell_vals)
-        X_smell = init_population[i_smell].copy()
-
-        # vision search
-        for i in range(POPULATION_SIZE):
-            init_population[i] = X_smell + np.random.randn(tasks_num) * W_VISION_STEP_SIZE
-            init_population[i] = np.clip(init_population[i], 0, machines_num - 1)
-
-        for i in range(POPULATION_SIZE):
-            f_val = get_entity_fitness(init_population[i])
-
-            if f_val < global_best_val:
-                global_best_val = f_val
-                global_best_pos = init_population[i].copy()
-
-                print(f"New best {Common.scheduling_modes[Common.scheduling_mode]} - {global_best_val}")
-
-    return global_best_pos, global_best_val
-
-
-def schedule_tasks():
-    init_population = initialise()
-    _, best_val = optimise(init_population)
-
-    print(f"Final best {Common.scheduling_modes[Common.scheduling_mode]} - {best_val}")
-
-
-def main():
-    schedule_tasks()
+    def after_run(self, schedule_map, makespan, total_energy):
+        primary = total_energy if Common.scheduling_mode == Common.ENERGY_MODE else makespan
+        secondary = makespan if Common.scheduling_mode == Common.ENERGY_MODE else total_energy
+        with open("results/result_fruitfly", "a") as f:
+            f.write(f"{primary},{secondary}\n")
 
 
 if __name__ == "__main__":
-    main()
+    alg = FruitflyMethod(iterations=100, population_size=30, vision_step=5.0, show_chart=True)
+    alg.run()

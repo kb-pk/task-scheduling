@@ -1,26 +1,6 @@
-import scheduler.Common as Common
 import numpy as np
-
-features = Common.read_security_features()
-machines = Common.read_machines(features)
-tasks = Common.read_tasks(features)
-
-etc_matrix = Common.generate_etc_matrix(machines, tasks)
-
-tasks_num = len(tasks)
-machines_num = len(machines)
-
-DRAGONFLY_NUMBER = 30
-ITERATIONS_NUMBER = 100
-# weights
-W_INERTIA = 0.9
-W_SEPARATION = 0.1
-W_ALIGNMENT = 0.1
-W_COHESION = 0.1
-W_FOOD_ATTRACT = 2.0
-W_ENEMY_REPULSE = 1.0
-# threshold for being considered a neighbor
-NEIGHBOUR_RADIUS_THRESH = (len(machines) - 1) / 2
+import scheduler.Common as Common
+from .BaseMethod import BaseMethod, Lang
 
 description = {
     "pl": """
@@ -65,137 +45,122 @@ description = {
 }
 
 
-def decode(position_vector):
+class DragonflyMethod(BaseMethod):
     """
-    Dekoduje chromosom position_vector na przypisanie zadań do maszyn
-
-    :param position_vector: chromosom (wektor pozycji)
-    :return: tablica przypisania maszyn do zadań w postaci [machine_id, machine_id, ...], gdzie indeks w tablicy = task_id
+    Implementacja klasowa Dragonfly wykorzystująca wspólne utilsy w Common.
     """
-    assign = np.rint(position_vector).astype(int)
-    return np.clip(assign, 0, machines_num - 1)
+    def __init__(self,
+                 iterations=100,
+                 population_size=30,
+                 w_inertia=0.9,
+                 w_separation=0.1,
+                 w_alignment=0.1,
+                 w_cohesion=0.1,
+                 w_food=2.0,
+                 w_enemy=1.0,
+                 neighbour_radius_factor=0.5,
+                 show_chart=True):
+        super().__init__(show_chart=show_chart)
+        self.iterations = iterations
+        self.population_size = population_size
+        self.w_inertia = w_inertia
+        self.w_separation = w_separation
+        self.w_alignment = w_alignment
+        self.w_cohesion = w_cohesion
+        self.w_food = w_food
+        self.w_enemy = w_enemy
+        self.neighbour_radius_thresh = neighbour_radius_factor * (len(self.machines) - 1)
 
+        self.X = None  # positions
+        self.V = None  # velocities
+        self.best_pos = None
+        self.worst_pos = None
+        self.best_score = None
+        self.other_score = None
 
-def get_entity_fitness(position_vector):
-    match Common.scheduling_mode:
-        case Common.MAKESPAN_MODE:
-            return makespan(position_vector)
-        case Common.ENERGY_MODE:
-            return energy(position_vector)
+    def get_method_name(self):
+        return "dragonfly"
 
-    return None
+    def get_method_description(self, lang: Lang):
+        return description["pl"] if lang == Lang.PL else description["en"]
 
+    # --- lifecycle ---
+    def initialize(self):
+        tasks_num = len(self.tasks)
+        machines_num = len(self.machines)
+        self.X = np.random.uniform(0, machines_num - 1, size=(self.population_size, tasks_num))
+        self.V = np.zeros_like(self.X)
+        fitness = np.array([Common.vector_fitness(x, self.etc, self.machines, Common.scheduling_mode)[0] for x in self.X])
+        b_idx = np.argmin(fitness)
+        w_idx = np.argmax(fitness)
+        self.best_pos = self.X[b_idx].copy()
+        self.worst_pos = self.X[w_idx].copy()
+        self.best_score, self.other_score = Common.vector_fitness(self.best_pos, self.etc, self.machines, Common.scheduling_mode)
 
-def makespan(position_vector):
-    """
-    Funkcja przystosowania, liczy makespan przyjmując position_vector
+    def optimize(self):
+        for it in range(self.iterations):
+            self._iterate()
+            cur, oth = Common.vector_fitness(self.best_pos, self.etc, self.machines, Common.scheduling_mode)
+            if cur < self.best_score:
+                self.best_score = cur
+                self.other_score = oth
+                print(f"[{it}] new best {Common.scheduling_modes[Common.scheduling_mode]}: {self.best_score:.4f}")
 
-    :param position_vector: chromosom (wektor pozycji)
-    :return: makespan (skalar)
-    """
-    """Compute makespan of a schedule given by 'position_vector'."""
-    assign = decode(position_vector)
-    loads = [etc_matrix[assign == j, j].sum() for j in range(machines_num)]
-    return max(loads)
+    def get_best_solution(self):
+        return self.best_pos
 
+    def build_schedule_map(self, position_vector):
+        assign = Common.decode_position_vector(position_vector, len(self.machines))
+        schedule_map = {m: [] for m in self.machines.index.values}
+        for task_id, m_id in enumerate(assign):
+            schedule_map[int(m_id)].append(task_id)
+        return schedule_map
 
-def energy(position_vector):
-    """
-    Funkcja przystosowania, liczy zużytą energię danego mapowania maszyn i zadań
+    def after_run(self, schedule_map, makespan, total_energy):
+        primary = total_energy if Common.scheduling_mode == Common.ENERGY_MODE else makespan
+        secondary = makespan if Common.scheduling_mode == Common.ENERGY_MODE else total_energy
+        with open("results/result_dragonfly", "a") as f:
+            f.write(f"{primary},{secondary}\n")
 
-    :param position_vector: chromosom (wektor pozycji)
-    :return: energy (skalar)
-    """
-    assign = decode(position_vector)
-    loads = [etc_matrix[assign == j, j].sum() for j in range(machines_num)]
-    makespan_val = max(loads)
+    # --- core iteration ---
+    def _iterate(self):
+        tasks_num = len(self.tasks)
+        machines_num = len(self.machines)
+        dist = np.linalg.norm(self.X[:, None, :] - self.X[None, :, :], axis=2)
+        prev_best_val = Common.vector_fitness(self.best_pos, self.etc, self.machines, Common.scheduling_mode)[0]
+        prev_worst_val = Common.vector_fitness(self.worst_pos, self.etc, self.machines, Common.scheduling_mode)[0]
 
-    p_busy = machines['P_busy'].values
-    p_idle = machines['P_idle'].values
-
-    # Energy = (BusyTime * P_busy) + (IdleTime * P_idle)
-    # where IdleTime = Makespan - BusyTime (load)
-    total_energy = np.sum(loads * p_busy + (makespan_val - loads) * p_idle)
-
-    return total_energy
-
-
-def initialise():
-    """
-    Inicjalizuje populację początkową
-
-    :return: wektor prędkości, wektor pozycji, najlepszy osobnik z początkowej populacji, najgorszy, wartość funkcji przystosowania najlepszego osobnika
-    """
-    X = np.random.uniform(0, machines_num - 1, size=(DRAGONFLY_NUMBER, tasks_num))
-    V = np.zeros_like(X)
-    fitness = np.array([get_entity_fitness(x) for x in X])
-    best_idx = np.argmin(fitness)
-    worst_idx = np.argmax(fitness)
-    best_X = X[best_idx].copy()
-    worst_X = X[worst_idx].copy()
-    best_val = fitness[best_idx]
-
-    return X, V, best_X, worst_X, best_val
-
-
-def optimise(X, V, best_X, worst_X, best_val):
-    """
-    Optymalizuje początkową populację
-
-    :param X: initial position
-    :param V: initial velocity
-    :param best_X: najlepszy osobnik z początkowej populacji
-    :param worst_X: najgorszy osobnik z początkowej populacji
-    :param best_val: wartość funkcji przystosowania najlepszego osobnika
-    """
-    for iteration in range(ITERATIONS_NUMBER):
-        # Compute pairwise distances
-        dist = np.linalg.norm(X[:, None, :] - X[None, :, :], axis=2)
-        for i in range(DRAGONFLY_NUMBER):
-            neighbors = np.where((dist[i] < NEIGHBOUR_RADIUS_THRESH) & (dist[i] > 0))[0]
+        for i in range(self.population_size):
+            neighbors = np.where((dist[i] < self.neighbour_radius_thresh) & (dist[i] > 0))[0]
             if len(neighbors) > 0:
-                # Separation
-                S = -np.sum(X[neighbors] - X[i], axis=0)
-                # Alignment
-                A = np.mean(V[neighbors], axis=0)
-                # Cohesion
-                C = np.sum(np.mean(X[neighbors], axis=0) - X[i], axis=0)
-                # Attraction to food (best solution)
-                F = best_X - X[i]
-                # Distraction from enemy (worst solution)
-                Rv = worst_X + X[i]
-                # Velocity and position update
-                V[i] = W_INERTIA * V[i] + W_SEPARATION * S + W_ALIGNMENT * A + W_COHESION * C + W_FOOD_ATTRACT * F + W_ENEMY_REPULSE * Rv
-                X[i] += V[i]
+                S = -np.sum(self.X[neighbors] - self.X[i], axis=0)               # separation
+                A = np.mean(self.V[neighbors], axis=0)                            # alignment
+                C = np.mean(self.X[neighbors], axis=0) - self.X[i]                # cohesion
+                F = self.best_pos - self.X[i]                                     # attraction to food
+                Rv = self.worst_pos + self.X[i]                                   # repulsion (as in original)
+                self.V[i] = (
+                    self.w_inertia * self.V[i] +
+                    self.w_separation * S +
+                    self.w_alignment * A +
+                    self.w_cohesion * C +
+                    self.w_food * F +
+                    self.w_enemy * Rv
+                )
+                self.X[i] += self.V[i]
             else:
-                # Random walk (Levy-like)
-                X[i] += np.random.randn(tasks_num) * (X[i] - worst_X)
-            # Enforce bounds
-            X[i] = np.clip(X[i], 0, machines_num - 1)
-        # Re-evaluate fitness
-        fitness = np.array([get_entity_fitness(x) for x in X])
-        current_best = np.min(fitness)
-        current_worst = np.max(fitness)
-        # Update global best/worst
-        if current_best < best_val:
-            best_val = current_best
-            best_X = X[np.argmin(fitness)].copy()
-            print(f"New best {Common.scheduling_modes[Common.scheduling_mode]} - {best_val}")
-        if current_worst > get_entity_fitness(worst_X):
-            worst_X = X[np.argmax(fitness)].copy()
+                # random walk
+                self.X[i] += np.random.randn(tasks_num) * (self.X[i] - self.worst_pos)
+            self.X[i] = np.clip(self.X[i], 0, machines_num - 1)
 
-    return best_X, best_val
-
-
-def schedule_tasks():
-    X, V, best_X, worst_X, best_val = initialise()
-    best_X, best_val = optimise(X, V, best_X, worst_X, best_val)
-    print(f"Final best {Common.scheduling_modes[Common.scheduling_mode]} - {best_val}")
-
-
-def main():
-    schedule_tasks()
+        fitness = np.array([Common.vector_fitness(x, self.etc, self.machines, Common.scheduling_mode)[0] for x in self.X])
+        cb = np.argmin(fitness)
+        cw = np.argmax(fitness)
+        if fitness[cb] < prev_best_val:
+            self.best_pos = self.X[cb].copy()
+        if fitness[cw] > prev_worst_val:
+            self.worst_pos = self.X[cw].copy()
 
 
 if __name__ == "__main__":
-    main()
+    alg = DragonflyMethod(iterations=100, population_size=30, w_inertia=0.9, w_separation=0.1, w_alignment=0.1, w_cohesion=0.1, w_food=2.0, w_enemy=1.0, neighbour_radius_factor=0.5, show_chart=True)
+    alg.run()
