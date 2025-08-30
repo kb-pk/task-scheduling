@@ -311,5 +311,5 @@ class MichiganMethod(BaseMethod):
     
 
 if __name__ == "__main__":
-    m = MichiganMethod(iterations=100, pm=0.01)
-    m.run()
+    alg = MichiganMethod(iterations=100, pm=0.01)
+    alg.run()

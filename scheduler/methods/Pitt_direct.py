@@ -1,484 +1,408 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Feb  2 12:42:50 2019
-
-@author: ini
-"""
-import csv
-import time
-from hmac import new
-
-import pandas as pd
-import numpy as np
+from __future__ import annotations
 import random
-import csv
-from collections import Counter
+from typing import List, Tuple, Dict
+
+import numpy as np
 
 import scheduler.Common as Common
+from .BaseMethod import BaseMethod, Lang
 
-ITERATIONS_NUMBER = 100
-POPULATION_SIZE = 10
-NUMBER_OF_CROSSOVER_POINTS = 1
-MUTATION_POSSIBILITY = 0.01
 
-description = {
-    "pl": """
-    Algorytm oparty o podejście Pitt, reprezentacja bezpośrednia.
-        
-    Osobnik - reprezentacja konkretnego harmonogramu zadań dla wszystkich maszyn. Składa się z 1 chromosomu.
-    Chromosom - harmonogram zadań dla wszystkich maszyn. Składa się z N (liczba zadań) genów.
-    Gen - reprezentacja maszyny (machine_id). Indeks genu w chromosomie to numer zadania przypisanego do maszyny. Geny mogą powtarzać się w chromosomie.
-    
-    Selekcja - brak selekcji pomiędzy epokami.
-    
-    Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
-    
-    Mutacja - losowanie nowej wartości genu (machine_id) wewnątrz chromosomu.
-    """,
-
-    "en": """
-    Algorithm based on the Pitt approach, direct representation.
-    
-    Entity - a representation of a particular schedule of tasks for all machines. Made up of 1 chromosome.
-    Chromosome - a particular schedule of tasks for all machines. Made up of N (task number) genes.
-    Gene - a representation of a machine (machine_id). The index of a gene in a chromosome is a number of a task that's assigned to this machine. Genes can repeat in the chromosome.
-    
-    Selection - no selection between epochs.
-    
-    Crossover - n-point, every entity takes part.
-    
-    Mutation - a gene's value (machine_id) is replaced with a new, randomly generated one.
+class PittDirectMethod(BaseMethod):
     """
-}
+    Algorytm GA (Pitt – reprezentacja bezpośrednia) w schemacie BaseMethod.
 
-"""
-Wczytuje dane dotyczace maszyn i zadan z plikow
-"""
+    Reprezentacja osobnika:
+      - Lista length = liczba zadań.
+      - Pozycja i = ID zadania i.
+      - Wartość na pozycji i = ID maszyny wykonującej zadanie i.
 
-features = Common.read_security_features()
-machines = Common.read_machines(features)
-tasks = Common.read_tasks(features)
+    Ograniczenia:
+      - Każde zadanie przypisane do jednej maszyny spełniającej wymagania bezpieczeństwa.
+      - Dodatkowo (walidacja): każdy osobnik musi zawierać przynajmniej jedną instancję
+        każdego machine_id (żadna maszyna nie może pozostać bez zadania).
 
+    Operatory:
+      - Crossover: n‑punktowy (NUMBER_OF_CROSSOVER_POINTS), wymiana segmentów między dwiema listami.
+      - Mutacja: z prawdopodobieństwem pm zmiana genu na inny machine_id (jeśli bieżący machine_id
+        występuje w chromosomie co najmniej dwa razy, aby nie pozbawić maszyny wszystkich zadań).
+        (Zachowane zachowanie oryginału – bez dodatkowej kontroli zgodności z wymaganiami zadania.)
 
-def map_possible_machines_to_tasks():
+    Ocena:
+      - Makespan = max czas obciążenia maszyn.
+      - Energia = suma (busy*P_busy + idle*P_idle).
+      - W zależności od Common.scheduling_mode metryka główna to makespan albo energia.
+
+    Wynik:
+      - build_schedule_map() tworzy mapę {machine_id: [task_ids]} w kolejności indeksów zadań.
     """
-    Mapuje zadania i maszyny, które dane zadanie mogą wykonać (na podstawie features).
-    :return: Słownik {task_id: [machine_id, machine_id, ...], ...}
-    """
-    possible_machines_for_tasks = {task_id: [
-        machine_id for machine_id in machines.index.values
-        if Common.can_execute_task_on_machine(machines.iloc[machine_id], tasks.iloc[task_id], features)
-    ] for task_id in tasks.index.values}
+    def __init__(self,
+                 iterations: int = 100,
+                 population_size: int = 10,
+                 crossover_points: int = 1,
+                 mutation_probability: float = 0.01,
+                 show_chart: bool = True):
+        """
+        :param iterations: liczba epok
+        :param population_size: liczebność populacji (wymagana parzysta)
+        :param crossover_points: liczba punktów krzyżowania (>=1)
+        :param mutation_probability: prawdopodobieństwo mutacji genu
+        :param show_chart: rysowanie wykresu po zakończeniu
+        """
+        super().__init__(show_chart=show_chart)
+        self.iterations = iterations
+        self.population_size = population_size
+        self.crossover_points = crossover_points
+        self.pm = mutation_probability
 
-    return possible_machines_for_tasks
+        self._tasks_possible_machines: Dict[int, List[int]] = {}
+        self.population: List[List[int]] = []
+        self.best_individual: List[int] | None = None
+        self.best_score: float | None = None
+        self.other_score: float | None = None
 
+    # ---------- Identyfikacja / opis ----------
 
-def generate_individual(possible_machines_for_tasks):
-    individual = []
+    def get_method_name(self) -> str:
+        return "pitt_direct"
 
-    for task_id, possible_machines in possible_machines_for_tasks.items():
-        individual.append(random.choice(possible_machines))
+    def get_method_description(self, lang: Lang):
+        if lang == Lang.PL:
+            return (
+                """
+                Algorytm oparty o podejście Pitt, reprezentacja bezpośrednia.
+                    
+                Osobnik - reprezentacja konkretnego harmonogramu zadań dla wszystkich maszyn. Składa się z 1 chromosomu.
+                Chromosom - harmonogram zadań dla wszystkich maszyn. Składa się z N (liczba zadań) genów.
+                Gen - reprezentacja maszyny (machine_id). Indeks genu w chromosomie to numer zadania przypisanego do maszyny. Geny mogą powtarzać się w chromosomie.
+                
+                Selekcja - brak selekcji pomiędzy epokami.
+                
+                Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
+                
+                Mutacja - losowanie nowej wartości genu (machine_id) wewnątrz chromosomu.
+                """
+            )
+        return (
+            """
+            Algorithm based on the Pitt approach, direct representation.
+            
+            Entity - a representation of a particular schedule of tasks for all machines. Made up of 1 chromosome.
+            Chromosome - a particular schedule of tasks for all machines. Made up of N (task number) genes.
+            Gene - a representation of a machine (machine_id). The index of a gene in a chromosome is a number of a task that's assigned to this machine. Genes can repeat in the chromosome.
+            
+            Selection - no selection between epochs.
+            
+            Crossover - n-point, every entity takes part.
+            
+            Mutation - a gene's value (machine_id) is replaced with a new, randomly generated one.
+            """
+        )
 
-    return individual
+    # ---------- Cykl życia ----------
 
+    def initialize(self):
+        """
+        Przygotowanie:
+          - Budowa mapy możliwych maszyn dla zadań.
+          - Generacja populacji startowej.
+          - Ocena i zapamiętanie najlepszego.
+        """
+        if self.population_size % 2 != 0:
+            raise ValueError("Population size should be even for pairing in crossover.")
+        if self.crossover_points < 1:
+            raise ValueError("crossover_points must be >= 1")
 
-def generate_population(population_size):
-    population = []
-    possible_machines_for_tasks = map_possible_machines_to_tasks()
+        self._tasks_possible_machines = self._map_possible_machines_to_tasks()
+        self.population = [self._generate_individual() for _ in range(self.population_size)]
+        self._evaluate_population_initial()
 
-    for i in range(population_size):
-        new_individual = generate_individual(possible_machines_for_tasks)
-        population.append(new_individual)
+    def optimize(self):
+        """
+        Pętla epok:
+          - Krzyżowanie populacji
+          - Mutacja populacji
+          - Ocena oraz aktualizacja najlepszego osobnika
+        """
+        for epoch in range(self.iterations):
+            self.population = self._crossover_population(self.population)
+            self.population = self._mutate_population(self.population)
+            improved = self._evaluate_population_update_best()
+            if improved:
+                if Common.scheduling_mode == Common.MAKESPAN_MODE:
+                    print(f"[{epoch}] New best makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
+                else:
+                    print(f"[{epoch}] New best energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
 
-    return population
+    def get_best_solution(self):
+        """
+        Zwraca najlepszy znaleziony osobnik (lista machine_id per task).
+        """
+        return self.best_individual
 
+    def build_schedule_map(self, solution: List[int]):
+        """
+        Konwersja listy przypisań (task -> machine_id) na mapę {machine_id: [task_id,...]}.
+        Zachowuje rosnący porządek ID zadań.
+        """
+        schedule_map = {m_id: [] for m_id in self.machines.index.values}
+        for task_id, machine_id in enumerate(solution):
+            schedule_map[machine_id].append(task_id)
+        return schedule_map
 
-def select_solutions(population):
-    """
-    Funkcja selekcji zwracajaca najlepszych osobnikow - u nas zwraca cala populacje
-    :param population:
-    :return:
-    """
-    return population
-
-
-def create_new_generation_from_parents(parents):
-    individual_length = len(parents[0])
-    crossover_points = random.sample(range(0, individual_length - 1), NUMBER_OF_CROSSOVER_POINTS)
-    crossover_points.sort()
-    first_new_individual = []
-    second_new_individual = []
-    for i in range(NUMBER_OF_CROSSOVER_POINTS):
-        if i == 0:
-            first_new_individual.extend(parents[0][:crossover_points[0]])
-            second_new_individual.extend(parents[1][:crossover_points[0]])
-        else:
-            first_new_individual.extend(parents[i % 2][crossover_points[i - 1]:crossover_points[i]])
-            second_new_individual.extend(parents[(i + 1) % 2][crossover_points[i - 1]:crossover_points[i]])
-    first_new_individual.extend(
-        parents[NUMBER_OF_CROSSOVER_POINTS % 2][crossover_points[NUMBER_OF_CROSSOVER_POINTS - 1]:])
-    second_new_individual.extend(
-        parents[(NUMBER_OF_CROSSOVER_POINTS + 1) % 2][crossover_points[NUMBER_OF_CROSSOVER_POINTS - 1]:])
-    return (first_new_individual, second_new_individual)
-
-
-def is_individual_valid(individual, machines_size):
-    return set(range(machines_size)).issubset(individual)
-
-
-def create_new_generation_from_parents_with_validation(parents, machines_size):
-    children = ()
-    while True:
-        children = create_new_generation_from_parents(parents)
-        if is_individual_valid(children[0], machines_size) and is_individual_valid(children[1], machines_size):
-            break
-    return children
-
-
-def crossover_population(population, machines_size):
-    """
-    Funkcja krzyzujaca - zwraca nowych osobnikow poprzez proces reprodukcji ich przodkow
-    :param population:
-    :return:
-    """
-    new_population = []
-    for i in range(0, len(population), 2):
-        new_generation = create_new_generation_from_parents_with_validation(population[i:i + 2], machines_size)
-        new_population.append(new_generation[0])
-        new_population.append(new_generation[1])
-    return new_population
-
-
-def is_mutation_possible(machine_id, individual):
-    counter = 0
-    is_mutation_possible = False
-    for genomeValue in individual:
-        if genomeValue == machine_id:
-            counter += 1
-        if counter == 2:
-            is_mutation_possible = True
-            break
-    return is_mutation_possible
-
-
-def should_mutate():
-    mutation_rand_val = random.uniform(0, 1)
-    return mutation_rand_val <= MUTATION_POSSIBILITY
-
-
-def mutate_genome(machines_size, machine_id):
-    new_value = 0
-    while True:
-        new_value = random.randint(0, machines_size - 1)
-        if new_value != machine_id:
-            break
-    return new_value
-
-
-def mutate_individual(individual, machines_size):
-    new_individual = []
-    for machine_id in individual:
-        if should_mutate() and is_mutation_possible(machine_id, individual):
-            new_individual.append(mutate_genome(machines_size, machine_id))
-        else:
-            new_individual.append(machine_id)
-    return new_individual
-
-
-def mutate_population(population, machines_size):
-    """
-    Funkcja mutacji - jej zadaniem jest wprowadzenie do chromosomu losowych zmian
-    :param population:
-    :return:
-    """
-    new_population = []
-    for individual in population:
-        new_population.append(mutate_individual(individual, machines_size))
-    return new_population
-
-
-def calculate_individual_makespan(population, etc_matrix, machines_size):
-    machines_values = [0.0] * machines_size
-    for i in range(len(population)):
-        machines_values[population[i]] += etc_matrix[i, population[i]]
-    return max(machines_values)
-
-def calculate_individual_power(population, etc_matrix, machines_size, machines):
-    machines_values = [0.0] * machines_size
-    for i in range(len(population)):
-        machines_values[population[i]] += etc_matrix[i, population[i]]
-    max_time = max(machines_values)
-    total_power = 0
-    for i in range(len(machines_values)):
-        total_power = total_power + machines_values[i] * machines.values[i][2] + (max_time - machines_values[i]) * machines.values[i][3]
-    return total_power
-
-def rate_adaptation(population, etc_matrix, machines_size, machines = None):
-    """
-    Ocena przystosowania - ocenia przystosowania nowej populacji - u nas jest to czas makespan
-    Zadaniem naszego programu jest uzyskanie jak najmniejszej wartosci
-    :param population:
-    :return:
-    """
-    best_individual = 0.0
-    other_param = 0.0
-    for i in range(len(population)):
-        individual = 0.0
+    def after_run(self, schedule_map, makespan, total_energy):
+        """
+        Dodatkowy log wyników do pliku tekstowego.
+        """
         if Common.scheduling_mode == Common.MAKESPAN_MODE:
-            individual = calculate_individual_makespan(population[i], etc_matrix, machines_size)
-            other_param = calculate_individual_power(population[i], etc_matrix, machines_size, machines)
-        elif Common.scheduling_mode == Common.ENERGY_MODE:
-            individual = calculate_individual_power(population[i], etc_matrix, machines_size, machines)
-            other_param = calculate_individual_makespan(population[i], etc_matrix, machines_size)
-        if individual < best_individual or i == 0:
-            best_individual = individual
-            other_for_best = other_param
-    return best_individual, other_for_best
+            primary = makespan
+            secondary = total_energy
+        else:
+            primary = total_energy
+            secondary = makespan
+        with open("results/result_pitt_direct", "a") as f:
+            f.write(f"{primary},{secondary}\n")
 
+    # ---------- Generacja / ocena ----------
 
-def should_stop_iterations():
-    """
-    Warunek stopu - u nas brana pod uwage tylko liczba iteracji
-    :return:
-    """
-    return False
+    def _map_possible_machines_to_tasks(self) -> Dict[int, List[int]]:
+        """
+        Dla każdego zadania listuje maszyny spełniające wymagania bezpieczeństwa.
+        {task_id: [machine_id,...]}
+        """
+        mapping = {}
+        for task_id in self.tasks.index.values:
+            allowed = [
+                machine_id for machine_id in self.machines.index.values
+                if Common.can_execute_task_on_machine(
+                    self.machines.iloc[machine_id],
+                    self.tasks.iloc[task_id],
+                    self.features
+                )
+            ]
+            if not allowed:
+                raise ValueError(f"No feasible machine for task {task_id}")
+            mapping[task_id] = allowed
+        return mapping
 
+    def _generate_individual(self) -> List[int]:
+        """
+        Losowe przypisanie każdego zadania do jednej z dozwolonych maszyn.
+        Gwarantuje (heurystycznie), że każda maszyna pojawi się co najmniej raz:
+          - najpierw jedno zadanie per maszyna (jeśli możliwe),
+          - potem reszta losowo.
+        """
+        n_tasks = len(self.tasks)
+        n_machines = len(self.machines)
+        assignment = [-1] * n_tasks
 
-def iterate_next_population(new_population, size):
-    new_population = select_solutions(new_population)
-    new_population = crossover_population(new_population, len(machines))
-    new_population = mutate_population(new_population, len(machines))
-    return new_population
-
-
-def get_best_schedule_from_population(population, etc_matrix, machines_size):
-    best_individual_makespan = 0.0
-    for i in range(len(population)):
-        individual_makespan = calculate_individual_makespan(population[i], etc_matrix, machines_size)
-        if individual_makespan < best_individual_makespan or i == 0:
-            best_individual_makespan = individual_makespan
-            best_individual = population[i]
-    return best_individual
-
-
-def get_tasks_on_machine(machine_id, best_schedule, etc_matrix):
-    machine_tasks = []
-    time = 0.0
-    for i in range(len(best_schedule)):
-        if best_schedule[i] == machine_id:
-            task_value_on_machine = etc_matrix[i][machine_id]
-            time += task_value_on_machine
-            machine_tasks.append(str(i) + "(" + "{0:.2f}".format(task_value_on_machine) + ")")
-    machine_tasks = ["{0:.2f}".format(time)] + machine_tasks
-    return machine_tasks
-
-
-def prepare_schedule_to_save(schedule, machines_size, etc_matrix):
-    rows = []
-    for i in range(machines_size):
-        row = []
-        row.append(str(i))
-        row.extend(get_tasks_on_machine(i, schedule, etc_matrix))
-        rows.append(row)
-    return rows
-
-
-def save_results_to_file(file_name, best_adaptation_rate, best_schedule, machines_size, etc_matrix):
-    wfile = open(file_name, "w", newline='')
-    writer = csv.writer(wfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    writer.writerow(["Best adaptation rate:", "{0:.2f}".format(best_adaptation_rate)])
-    writer.writerow(["MachineID", "Time on machine", "MachineId(time)"])
-    saveable_population = prepare_schedule_to_save(best_schedule, machines_size, etc_matrix)
-    for row in saveable_population:
-        writer.writerow(row)
-    wfile.close()
-
-
-def get_tasks_of_machines(best_schedule):
-    tasks_of_machines = [[] for _ in range(len(machines))]
-
-    for i in range(len(best_schedule)):
-        for j in range(len(machines)):
-            if best_schedule[i] == j:
-                tasks_of_machines[j].append(i)
-
-    return tasks_of_machines
-
-
-def get_max_tasks_number(best_schedule):
-    c = Counter(best_schedule)
-    max_tasks = max(c.values())
-
-    return max_tasks
-
-
-def pretty_print(best_schedule, etc, machines, max_time):
-    """
-    Wypisywanie harmonogramu zadan (populacji) wraz z czasami wykonania zadan.
-
-    :param best_schedule: harmonogram dla najlepszego rozwiazania
-    :param etc: macierz etc
-    """
-    print('-----------------------------------------------------')
-    max_tasks = get_max_tasks_number(best_schedule)
-    tasks_of_machines = get_tasks_of_machines(best_schedule)
-
-    columns = format('', '8s')
-    for i in range(0, max_tasks):
-        columns += format(i, '13d')
-
-    if Common.output_mode == Common.ENERGY_O_MODE or Common.output_mode == Common.ALL_O_MODE:
-        columns += " IDLE "
-
-    print('\t\ttasks')
-    print(columns)
-    print('machines')
-
-    for machine_id in range(len(machines)):
-        row = format(machine_id, '8d')
-        time_sum = 0.0
-        energy_sum = 0.0
-        for i in range(len(tasks_of_machines[machine_id])):
-            if np.isnan(i):
-                break
-            time_sum += etc[int(tasks_of_machines[machine_id][i])][int(machine_id)]
-            energy = etc[int(i)][int(machine_id)] * machines.values[machine_id][2]
-            energy_sum += energy
-            if Common.output_mode == Common.MAKESPAN_O_MODE:
-                row += format(format(tasks_of_machines[machine_id][i], '5') + ' (' + format(round(etc[int(tasks_of_machines[machine_id][i])][int(machine_id)], 1),'5.1f') + ')', '12s')
-            elif Common.output_mode == Common.ENERGY_O_MODE:
-                row += format(format(tasks_of_machines[machine_id][i], '5') + ' (' + format(round(energy, 1), '5.1f') + ')','12s')
-            elif Common.output_mode == Common.ALL_O_MODE:
-                row += format(format(tasks_of_machines[machine_id][i], '5') + ' (' + format(round(energy, 1), '5.1f') + ';' + format(round(etc[tasks_of_machines[machine_id][i]][int(machine_id)], 1), '5.1f') + ')','12s')
-
-        idle_energy = (max_time - time_sum) * machines.values[machine_id][3]
-        if Common.output_mode == Common.MAKESPAN_O_MODE:
-            print(format(row, str((max_tasks) * 14) + 's') + ' | ' + str(round(time_sum, 2)))
-        elif Common.output_mode == Common.ENERGY_O_MODE:
-            print(format(row, str((max_tasks) * 14) + 's') + '(' + str(idle_energy) + ') | ' + str(round(energy_sum + idle_energy, 2)))
-        elif Common.output_mode == Common.ALL_O_MODE:
-            print(format(row, str((max_tasks) * 14) + 's') + '(' + str(idle_energy) + ') | MAKESPAN: ' + str(round(time_sum, 2)) + ' | ENERGY: ' + str(round(energy_sum + idle_energy, 2)))
-    print('-----------------------------------------------------')
-
-
-def print_no_time(best_schedule):
-    """
-    Wypisywanie harmonogramu zadan (populacji) bez czasow wykonania zadan.
-
-    :param best_schedule: harmonogram dla najlepszego rozwiazania
-    """
-    print('-----------------------------------------------------')
-    max_tasks = get_max_tasks_number(best_schedule)
-    tasks_of_machines = get_tasks_of_machines(best_schedule)
-
-    columns = format('', '8s')
-    for i in range(0, max_tasks):
-        columns += format(i, '13d')
-
-    print('\t\ttasks')
-    print(columns)
-    print('machines')
-
-    for machine_id in range(len(machines)):
-        row = format(machine_id, '8d')
-        for i in range(len(tasks_of_machines[machine_id])):
-            row += format(tasks_of_machines[machine_id][i], '13d')
-
-        print(format(row))
-    print('-----------------------------------------------------')
-
-
-def write_to_csv(best_score, best_schedule, etc, machines, max_time):
-    """
-    Zapisywanie do pliku csv
-    :param best_score: najlepszy wynik
-    :param best_schedule: harmonogram dla najlepszego rozwiazania
-    :param etc: macierz etc
-    """
-    max_tasks = get_max_tasks_number(best_schedule)
-    tasks_of_machines = get_tasks_of_machines(best_schedule)
-
-    with open('results/output_pitt_direct.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_NONNUMERIC)
-        writer.writerow(['{} optimized'.format(Common.scheduling_modes[Common.scheduling_mode]), ('%f' % best_score).replace('.', ',')])
-        first_row = ['Machines / Tasks']
-
-        for i in range(0, max_tasks):
-            first_row.append(str(i))
-
-        if Common.output_mode == Common.ENERGY_O_MODE or Common.output_mode == Common.ALL_O_MODE:
-            first_row.append('IDLE')
-
-        writer.writerow(first_row)
-
-        for machine_id in range(len(machines)):
-            row = [str(machine_id)]
-            time = 0.0
-            for i in range(len(tasks_of_machines[machine_id])):
-                if np.isnan(i):
+        # Faza 1: spróbuj zapewnić każdej maszynie jedno zadanie (jeśli liczba zadań >= maszyn)
+        unassigned_tasks = list(range(n_tasks))
+        random.shuffle(unassigned_tasks)
+        used_tasks = set()
+        for m_id in range(n_machines):
+            # znajdź pierwsze zadanie, które może trafić na m_id
+            found = False
+            for t in unassigned_tasks:
+                if t in used_tasks:
+                    continue
+                if m_id in self._tasks_possible_machines[t]:
+                    assignment[t] = m_id
+                    used_tasks.add(t)
+                    found = True
                     break
-                if Common.output_mode == Common.MAKESPAN_O_MODE:
-                    row.append(str(str(int(tasks_of_machines[machine_id][i])) + ' (' + ('%.1f' % etc[int(i)][int(machine_id)]).replace('.', ',') + ')'))
-                elif Common.output_mode == Common.ENERGY_O_MODE:
-                    time += etc[int(i)][int(machine_id)]
-                    row.append(str(str(int(tasks_of_machines[machine_id][i])) + ' (' + (('%.1f' % (etc[int(i)][int(machine_id)] * machines.values[machine_id][2]))).replace('.', ',') + ')'))
-                elif Common.output_mode == Common.ALL_O_MODE:
-                    time += etc[int(i)][int(machine_id)]
-                    row.append(str(str(int(tasks_of_machines[machine_id][i])) + ' (' + ('%.1f' % etc[int(i)][int(machine_id)]).replace('.', ',') + '|' + (('%.1f' % (etc[int(i)][int(machine_id)] * machines.values[machine_id][2]))).replace('.', ',') + ')'))
+            if not found:
+                # fallback: jeśli nie można - pozostaw do losowego przydziału
+                pass
 
-            if Common.output_mode == Common.ENERGY_O_MODE or Common.output_mode == Common.ALL_O_MODE:
-                time = max_time - time
-                row.append(('%.1f' % time).replace('.', ',') + '|' + ('%.1f' % (time * machines.values[machine_id][3])).replace('.', ','))
-            writer.writerow(row)
+        # Faza 2: pozostałe zadania
+        for t in range(n_tasks):
+            if assignment[t] == -1:
+                assignment[t] = random.choice(self._tasks_possible_machines[t])
+
+        # Walidacja – jeśli któraś maszyna nie otrzymała zadania, naprawa
+        self._ensure_all_machines_present(assignment)
+        return assignment
+
+    def _ensure_all_machines_present(self, individual: List[int]):
+        """
+        Gwarantuje, że każdy machine_id występuje przynajmniej raz.
+        Jeśli brakuje, przenosi losowe zadanie z maszyny posiadającej >1 zadanie.
+        """
+        counts = {m: 0 for m in self.machines.index.values}
+        for m in individual:
+            counts[m] += 1
+        missing = [m for m, c in counts.items() if c == 0]
+        if not missing:
+            return
+        # dla każdej brakującej, zabierz jedno zadanie z maszyny o największej liczbie zadań
+        for m_missing in missing:
+            donor = max(counts, key=lambda k: counts[k])
+            if counts[donor] <= 1:
+                continue
+            # znajdź indeks zadania przypisanego do donor
+            idx = next(i for i, v in enumerate(individual) if v == donor)
+            individual[idx] = m_missing
+            counts[donor] -= 1
+            counts[m_missing] += 1
+
+    def _evaluate_individual(self, indiv: List[int]) -> Tuple[float, float]:
+        """
+        Oblicza (primary_metric, secondary_metric):
+          - makespan
+          - energy
+        Wybór primary zależy od scheduling_mode.
+        """
+        n_machines = len(self.machines)
+        machine_times = [0.0] * n_machines
+        for task_id, machine_id in enumerate(indiv):
+            machine_times[machine_id] += self.etc[task_id][machine_id]
+        makespan = max(machine_times)
+        total_energy = 0.0
+        for m_id, busy in enumerate(machine_times):
+            p_busy = self.machines.values[m_id][2]
+            p_idle = self.machines.values[m_id][3]
+            total_energy += busy * p_busy + (makespan - busy) * p_idle
+        if Common.scheduling_mode == Common.ENERGY_MODE:
+            return total_energy, makespan
+        return makespan, total_energy
+
+    def _evaluate_population_initial(self):
+        """
+        Ocena pierwszej populacji i ustawienie pól best_*.
+        """
+        for ind in self.population:
+            main_val, other_val = self._evaluate_individual(ind)
+            if self.best_individual is None or main_val < self.best_score:
+                self.best_individual = ind[:]
+                self.best_score = main_val
+                self.other_score = other_val
+        if Common.scheduling_mode == Common.MAKESPAN_MODE:
+            print(f"Initial makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
+        else:
+            print(f"Initial energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
+
+    def _evaluate_population_update_best(self) -> bool:
+        """
+        Ocena po operatorach. Aktualizuje best_* jeśli znajdzie lepszy osobnik.
+        :return: True jeśli poprawiono wynik.
+        """
+        improved = False
+        for ind in self.population:
+            main_val, other_val = self._evaluate_individual(ind)
+            if main_val < self.best_score:
+                self.best_individual = ind[:]
+                self.best_score = main_val
+                self.other_score = other_val
+                improved = True
+        return improved
+
+    # ---------- Operatory genetyczne ----------
+
+    def _crossover_population(self, population: List[List[int]]) -> List[List[int]]:
+        """
+        N‑punktowe krzyżowanie par osobników po losowym przetasowaniu.
+        Walidacja: każdy potomek musi zawierać wszystkie machine_id (powtarzamy losowanie segmentów aż spełni warunek).
+        """
+        shuffled = population[:]
+        random.shuffle(shuffled)
+        new_pop: List[List[int]] = []
+        for i in range(0, len(shuffled), 2):
+            parents = shuffled[i:i + 2]
+            if len(parents) < 2:
+                new_pop.append(parents[0][:])
+                break
+            a, b = self._crossover_pair(parents[0], parents[1])
+            new_pop.append(a)
+            new_pop.append(b)
+        return new_pop
+
+    def _crossover_pair(self, p1: List[int], p2: List[int]) -> Tuple[List[int], List[int]]:
+        """
+        Krzyżowanie dwóch rodziców:
+          - Losuje self.crossover_points unikalnych punktów (w [0, n-2]).
+          - Naprzemiennie dokleja segmenty z rodziców.
+          - Waliduje obecność wszystkich maszyn (powtarza jeśli niepoprawne).
+        """
+        n = len(p1)
+        while True:
+            points = sorted(random.sample(range(0, n - 1), self.crossover_points))
+            child1, child2 = [], []
+            prev = 0
+            for idx, cp in enumerate(points):
+                if idx % 2 == 0:
+                    child1.extend(p1[prev:cp])
+                    child2.extend(p2[prev:cp])
+                else:
+                    child1.extend(p2[prev:cp])
+                    child2.extend(p1[prev:cp])
+                prev = cp
+            # ostatni segment
+            if len(points) % 2 == 0:
+                child1.extend(p1[prev:])
+                child2.extend(p2[prev:])
+            else:
+                child1.extend(p2[prev:])
+                child2.extend(p1[prev:])
+
+            if self._is_individual_valid(child1) and self._is_individual_valid(child2):
+                return child1, child2
+            # w przeciwnym razie spróbuj ponownie
+
+    def _is_individual_valid(self, individual: List[int]) -> bool:
+        """
+        Sprawdza czy osobnik zawiera przynajmniej jedno zadanie dla każdej maszyny.
+        """
+        machines_set = set(self.machines.index.values)
+        return machines_set.issubset(set(individual))
+
+    def _mutate_population(self, population: List[List[int]]) -> List[List[int]]:
+        """
+        Mutacja populacji: dla każdego genu wywołanie mutacji z prawdopodobieństwem pm
+        (jeśli nie pozbawia maszyny wszystkich zadań).
+        """
+        mutated = []
+        for ind in population:
+            mutated.append(self._mutate_individual(ind))
+        return mutated
+
+    def _mutate_individual(self, individual: List[int]) -> List[int]:
+        """
+        Mutacja osobnika – tworzy nową listę (kopię z ewentualnymi zmianami).
+        """
+        result = individual[:]
+        counts = {m: 0 for m in self.machines.index.values}
+        for m in result:
+            counts[m] += 1
+        for idx, current_m in enumerate(result):
+            if np.random.uniform(0.0, 1.0) <= self.pm:
+                # Możliwość mutacji tylko jeśli maszyna ma >1 zadanie
+                if counts[current_m] > 1:
+                    new_m = self._mutate_gene(current_m)
+                    result[idx] = new_m
+                    counts[current_m] -= 1
+                    counts[new_m] = counts.get(new_m, 0) + 1
+        # Naprawa (teoretycznie zbędna, ale dla pewności):
+        self._ensure_all_machines_present(result)
+        return result
+
+    def _mutate_gene(self, current_machine: int) -> int:
+        """
+        Losuje nowy machine_id różny od current_machine.
+        (Zachowuje zachowanie oryginalne: brak weryfikacji cech zadania.)
+        """
+        n_machines = len(self.machines)
+        while True:
+            val = random.randint(0, n_machines - 1)
+            if val != current_machine:
+                return val
 
 
-def schedule_tasks(number_of_iterations, population_size):
-    if population_size % 2 != 0:
-        print("Population size should be even")
-        return
-    random.seed()
-    etc_matrix = Common.generate_etc_matrix(machines, tasks)
-    first_population = generate_population(population_size)
-    best_population = first_population
-    best_adaptation_rate, other_for_best = rate_adaptation(first_population, etc_matrix, len(machines), machines)
-    if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        print("Initial makespan value: " + "{0:.2f}".format(best_adaptation_rate) + " energy usage: " + "{0:.2f}".format(other_for_best))
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
-        print("Initial energy usage: " + "{0:.2f}".format(best_adaptation_rate) + " makespan: " + "{0:.2f}".format(other_for_best))
-    new_population = first_population
-    for i in range(number_of_iterations):
-        new_population = iterate_next_population(new_population, len(machines))
-        adaptation_rate, other_param = rate_adaptation(new_population, etc_matrix, len(machines), machines)
-        if adaptation_rate < best_adaptation_rate:
-            best_adaptation_rate = adaptation_rate
-            best_population = new_population
-            other_for_best = other_param
-            if Common.scheduling_mode == Common.MAKESPAN_MODE:
-                print("New best makespan value(iteration " + str(i) + "): " + "{0:.2f}".format(best_adaptation_rate) + " energy usage: " + "{0:.2f}".format(other_for_best))
-            elif Common.scheduling_mode == Common.ENERGY_MODE:
-                print("New best energy usage(iteration " + str(i) + "): " + "{0:.2f}".format(best_adaptation_rate) + " makespan: " + "{0:.2f}".format(other_for_best))
-        if should_stop_iterations():
-            break
-    best_schedule = get_best_schedule_from_population(best_population, etc_matrix, len(machines))
-    save_results_to_file("results/results_pitt_direct.csv", best_adaptation_rate, best_schedule, len(machines), etc_matrix)
-    if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        print("Best makespan value: " + "{0:.2f}".format(best_adaptation_rate) + " energy usage: " + "{0:.2f}".format(other_for_best))
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
-        print("Best energy usage: " + "{0:.2f}".format(best_adaptation_rate) + " makespan: " + "{0:.2f}".format(other_for_best))
-    open('results/result_pitt_direct', 'a').write(str(best_adaptation_rate) + "," + str(other_for_best) + "\n")
-
-    if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        max_time = best_adaptation_rate
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
-        max_time = other_for_best
-    pretty_print(best_schedule, etc_matrix, machines, max_time)
-    write_to_csv(best_adaptation_rate, best_schedule, etc_matrix, machines, max_time)
-
-
-def main():
-    schedule_tasks(ITERATIONS_NUMBER, POPULATION_SIZE)
-    security_features = Common.read_security_features()
-
-
+# Punkt wejścia testowego
 if __name__ == "__main__":
-    main()
+    alg = PittDirectMethod(iterations=100,
+                           population_size=10,
+                           crossover_points=1,
+                           mutation_probability=0.01,
+                           show_chart=True)
+    alg.run()

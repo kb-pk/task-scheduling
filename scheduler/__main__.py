@@ -20,7 +20,7 @@ def choices(x):
         run_algorithm(Pitt_perm.PittPermMethod, iterations=100, population_size=10, pm_swap=0.01, pm_transposition=0.01, show_chart=True)
         time.sleep(1)
     elif x == 2:
-        Pitt_direct.main(),
+        run_algorithm(Pitt_direct.PittDirectMethod, iterations=100, population_size=10, crossover_points = 1, mutation_probability = 0.01, show_chart=True)
         time.sleep(1)
     elif x == 3:
         run_algorithm(Michigan.MichiganMethod, iterations=100, pm=0.01, show_chart=True)
