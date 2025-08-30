@@ -3,7 +3,7 @@ import scheduler.Common as Common
 import csv
 import numpy as np
 from enum import Enum
-import json, os
+import yaml, os
 
 class Lang(Enum):
     PL = 0
@@ -28,22 +28,31 @@ class BaseMethod(ABC):
 
     def get_method_description(self, lang: Lang):
         """
-        Wspólne pobieranie opisu z pliku data/descriptions.json na podstawie nazwy metody.
-        :param lang: Lang.PL / Lang.EN
-        :return: opis (str) lub placeholder gdy brak
+        Return method description loaded from data/descriptions.yaml (YAML only).
+        YAML structure:
+          method_key:
+            pl: |-
+              ...
+            en: |-
+              ...
+        If key or language text is missing – returns placeholder.
         """
         if BaseMethod._DESCRIPTIONS_CACHE is None:
-            # plik w katalogu root/data; bieżący plik = scheduler/methods/BaseMethod.py
             base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-            path = os.path.join(base_dir, "data", "descriptions.json")
-            with open(path, "r", encoding="utf-8") as f:
-                BaseMethod._DESCRIPTIONS_CACHE = json.load(f)
-
+            yaml_path = os.path.join(base_dir, "data", "descriptions.yaml")
+            try:
+                with open(yaml_path, "r", encoding="utf-8") as f:
+                    BaseMethod._DESCRIPTIONS_CACHE = yaml.safe_load(f) or {}
+            except FileNotFoundError:
+                BaseMethod._DESCRIPTIONS_CACHE = {}
+            except Exception as e:
+                print(f"[WARN] Failed to load YAML descriptions: {e}")
+                BaseMethod._DESCRIPTIONS_CACHE = {}
         key = self.get_method_name()
-
-        block = BaseMethod._DESCRIPTIONS_CACHE.get(key, {})
-        txt = block.get("pl" if lang == Lang.PL else "en", "").strip()
-        return txt if txt else f"(No description for method '{self.get_method_name()}' and lang {lang.name})"
+        block = BaseMethod._DESCRIPTIONS_CACHE.get(key, {}) if isinstance(BaseMethod._DESCRIPTIONS_CACHE, dict) else {}
+        txt = block.get("pl" if lang == Lang.PL else "en", "")
+        txt = (txt or "").strip()
+        return txt if txt else f"(No YAML description for '{key}' / {lang.name})"
 
     @abstractmethod
     def initialize(self):

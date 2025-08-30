@@ -1,4 +1,3 @@
-import traceback
 from .methods import Michigan
 from .methods import Pitt_direct
 from .methods import Pitt_perm
