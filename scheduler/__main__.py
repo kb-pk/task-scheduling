@@ -17,7 +17,7 @@ def run_algorithm(alg_cls: Type[BaseMethod], **kwargs):
 
 def choices(x):
     if x == 1:
-        Pitt_perm.main(),
+        run_algorithm(Pitt_perm.PittPermMethod, iterations=100, population_size=10, pm_swap=0.01, pm_transposition=0.01, show_chart=True)
         time.sleep(1)
     elif x == 2:
         Pitt_direct.main(),
