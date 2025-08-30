@@ -10,26 +10,15 @@ class Lang(Enum):
     EN = 1
 
 class BaseMethod(ABC):
-    """
-    Bazowa klasa dla algorytmów.
-    Zapewnia:
-      - Wczytanie danych (features, machines, tasks)
-      - Generację macierzy ETC
-      - run(): uruchomienie algorytmu, budowa schedule_map, obliczenie metryk,
-               wypisanie wyników i (opcjonalnie) wykres.
-    Algorytm dostarcza:
-      - execute() -> solution (dowolna struktura wewnętrzna)
-      - build_schedule_map(solution) -> dict {machine_id: [task_ids]}
-      - after_run(schedule_map, makespan, total_energy) (opcjonalnie)
-    """
 
     _DESCRIPTIONS_CACHE = None
 
-    def __init__(self, show_chart=True):
+    def __init__(self, iterations = 100, show_chart=True):
         self.features = Common.read_security_features()
         self.machines = Common.read_machines(self.features)
         self.tasks = Common.read_tasks(self.features)
         self.etc = Common.generate_etc_matrix(self.machines, self.tasks)
+        self.iterations = iterations
         self.show_chart = show_chart
 
     @abstractmethod
@@ -80,7 +69,8 @@ class BaseMethod(ABC):
         schedule_map = self.build_schedule_map(solution)
         makespan, total_energy = self._compute_metrics(schedule_map)
         Common.print_schedule(schedule_map, self.etc, self.machines, makespan, total_energy)
-        Common.plot_gantt_chart(schedule_map, self.etc, makespan)
+        if self.show_chart:
+            Common.plot_gantt_chart(schedule_map, self.etc, makespan)
         self.write_results_csv(schedule_map, makespan, total_energy)
         return makespan, total_energy
     

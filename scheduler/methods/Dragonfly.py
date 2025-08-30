@@ -1,11 +1,23 @@
 import numpy as np
 import scheduler.Common as Common
 from .BaseMethod import BaseMethod, Lang
+from scheduler.Parametrs import ParamDef, register_method
 
+@register_method
 class DragonflyMethod(BaseMethod):
-    """
-    Implementacja klasowa Dragonfly wykorzystująca wspólne utilsy w Common.
-    """
+    PARAM_DEFS = [
+        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
+        ParamDef("population_size", "int", 30, "Swarm size", min_value=2),
+        ParamDef("w_inertia", "float", 0.9, "Inertia weight", min_value=0.0, max_value=5.0),
+        ParamDef("w_separation", "float", 0.1, "Separation weight", min_value=0.0, max_value=5.0),
+        ParamDef("w_alignment", "float", 0.1, "Alignment weight", min_value=0.0, max_value=5.0),
+        ParamDef("w_cohesion", "float", 0.1, "Cohesion weight", min_value=0.0, max_value=5.0),
+        ParamDef("w_food", "float", 2.0, "Food attraction weight", min_value=0.0, max_value=10.0),
+        ParamDef("w_enemy", "float", 1.0, "Enemy repulsion weight", min_value=0.0, max_value=10.0),
+        ParamDef("neighbour_radius_factor", "float", 0.5, "Neighbour radius factor", min_value=0.0, max_value=10.0),
+        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
+    ]
+
     def __init__(self,
                  iterations=100,
                  population_size=30,
@@ -17,8 +29,7 @@ class DragonflyMethod(BaseMethod):
                  w_enemy=1.0,
                  neighbour_radius_factor=0.5,
                  show_chart=True):
-        super().__init__(show_chart=show_chart)
-        self.iterations = iterations
+        super().__init__(iterations=iterations, show_chart=show_chart)
         self.population_size = population_size
         self.w_inertia = w_inertia
         self.w_separation = w_separation
@@ -69,12 +80,6 @@ class DragonflyMethod(BaseMethod):
         for task_id, m_id in enumerate(assign):
             schedule_map[int(m_id)].append(task_id)
         return schedule_map
-
-    def after_run(self, schedule_map, makespan, total_energy):
-        primary = total_energy if Common.scheduling_mode == Common.ENERGY_MODE else makespan
-        secondary = makespan if Common.scheduling_mode == Common.ENERGY_MODE else total_energy
-        with open("results/result_dragonfly", "a") as f:
-            f.write(f"{primary},{secondary}\n")
 
     # --- core iteration ---
     def _iterate(self):

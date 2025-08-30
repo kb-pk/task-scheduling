@@ -7,31 +7,18 @@ from sklearn.utils import shuffle
 from .BaseMethod import BaseMethod
 from .BaseMethod import Lang
 import scheduler.Common as Common
+from scheduler.Parametrs import ParamDef, register_method
 
+@register_method
 class MichiganMethod(BaseMethod):
-    """
-    Implementacja algorytmu w podejściu Michigan.
-    Reprezentacja:
-      - Wiersz DataFrame = jedna maszyna (osobnik).
-      - Kolumny = kolejne pozycje (sloty) zadań; brak zadania oznaczony NaN.
-    Operatory:
-      - Krzyżowanie: wymiana ogonów między parami maszyn (top vs bottom).
-      - Mutacja: tasowanie (shuffle) fragmentu chromosomu do pierwszego NaN.
-    Ocena:
-      - Obliczane czasy pracy (busy) każdej maszyny.
-      - Makespan = max busy.
-      - Energia = suma (busy*P_busy + idle*P_idle).
-      - W zależności od trybu (makespan / energy) sortowana jest populacja.
-    """
+    PARAM_DEFS = [
+        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
+        ParamDef("pm", "float", 0.01, "Mutation probability", min_value=0.0, max_value=1.0),
+        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
+    ]
+
     def __init__(self, iterations=100, pm=0.01, show_chart=True):
-        """
-        Inicjalizacja obiektu algorytmu.
-        :param iterations: liczba epok optymalizacji
-        :param pm: prawdopodobieństwo mutacji chromosomu
-        :param show_chart: czy rysować wykres Gantta
-        """
-        super().__init__(show_chart=show_chart)
-        self.iterations = iterations
+        super().__init__(iterations=iterations, show_chart=show_chart)
         self.pm = pm
         self.population = None         # bieżąca populacja (DataFrame)
         self.best_population = None    # najlepsza znaleziona populacja (DataFrame)

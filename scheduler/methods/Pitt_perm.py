@@ -8,62 +8,25 @@ from sklearn.utils import shuffle
 
 import scheduler.Common as Common
 from .BaseMethod import BaseMethod, Lang
+from scheduler.Parametrs import ParamDef, register_method
 
-
+@register_method
 class PittPermMethod(BaseMethod):
-    """
-    Implementacja algorytmu GA w podejściu Pitt (reprezentacja permutowana) w zunifikowanym
-    schemacie BaseMethod (initialize -> optimize -> get_best_solution -> build_schedule_map).
+    PARAM_DEFS = [
+        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
+        ParamDef("population_size", "int", 10, "Population size (even recommended)", min_value=2),
+        ParamDef("pm_swap", "float", 0.01, "Swap mutation probability", min_value=0.0, max_value=1.0),
+        ParamDef("pm_transposition", "float", 0.01, "Transposition mutation probability", min_value=0.0, max_value=1.0),
+        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
+    ]
 
-    Reprezentacja osobnika (individual):
-      - Krotka (tasks_sequence, machines_chromosome)
-        tasks_sequence: lista długości N (N = liczba zadań), permutacja identyfikatorów zadań.
-        machines_chromosome: lista długości M (M = liczba maszyn), gdzie każdy gen mówi
-          ile kolejnych zadań z tasks_sequence przypada na daną maszynę.
-          Suma machines_chromosome == N.
-
-    Interpretacja harmonogramu:
-      - Pierwsze machines_chromosome[0] zadań z tasks_sequence trafia na maszynę 0,
-        kolejne machines_chromosome[1] zadań na maszynę 1, itd.
-
-    Ograniczenia wykonalności:
-      - Każde zadanie może zostać przypisane tylko do jednej z maszyn spełniających wymagania
-        bezpieczeństwa. Przy konstruowaniu osobnika zadania są przydzielane biorąc pod uwagę
-        listę dopuszczalnych maszyn (tasks_to_machines).
-
-    Operatory:
-      - Crossover (Ordered Crossover – OX) na chromosomie zadań (tasks_sequence) – machines_chromosome
-        dziedziczone wprost od rodziców (jak w implementacji pierwotnej).
-      - Mutacje dwóch typów:
-          * Swap mutation (S): zamiana dwóch zadań, o ile zachowany zostaje warunek wykonalności.
-          * Transposition mutation (T): przeniesienie pojedynczego zadania „w inne miejsce” poprzez
-            modyfikację machines_chromosome (zmiana liczby zadań na maszynach) oraz przetasowanie
-            tasks_sequence odzwierciedlające przesunięcie.
-
-    Funkcja oceny:
-      - W zależności od Common.scheduling_mode minimalizujemy:
-          * makespan (maksymalny czas wykonywania maszyn) – lub
-          * całkowitą energię (busy + idle)
-        Druga metryka zapisywana jest jako other_score wyłącznie informacyjnie.
-
-    Wynik końcowy:
-      - build_schedule_map() zwraca {machine_id: [task_id, ...]} odczytane z najlepszego osobnika.
-    """
     def __init__(self,
                  iterations: int = 100,
                  population_size: int = 10,
                  pm_swap: float = 0.01,
                  pm_transposition: float = 0.01,
                  show_chart: bool = True):
-        """
-        :param iterations: liczba epok optymalizacji
-        :param population_size: liczebność populacji (parzysta zalecana dla parowania w crossover)
-        :param pm_swap: prawdopodobieństwo mutacji typu swap dla pojedynczego genu
-        :param pm_transposition: prawdopodobieństwo mutacji typu transposition dla pojedynczego genu
-        :param show_chart: czy rysować wykres Gantta po zakończeniu
-        """
-        super().__init__(show_chart=show_chart)
-        self.iterations = iterations
+        super().__init__(iterations=iterations, show_chart=show_chart)
         self.population_size = population_size
         self.pm_swap = pm_swap
         self.pm_transposition = pm_transposition

@@ -1,3 +1,4 @@
+import traceback
 from .methods import Michigan
 from .methods import Pitt_direct
 from .methods import Pitt_perm
@@ -8,28 +9,38 @@ from . import Common
 
 import time
 from typing import Optional, Type
+from .Parametrs import instantiate_method
 
-current_algorithm: Optional[BaseMethod] = None  # "wskaznik" na bieżący obiekt algorytmu
+current_algorithm: Optional[BaseMethod] = None
 
-def run_algorithm(alg_cls: Type[BaseMethod], **kwargs):
-    global current_algorithm
-    current_algorithm = alg_cls(**kwargs)
-    current_algorithm.run()
+def run_algorithm(alg_cls, values_list=None):
+    if alg_cls is None:
+        print("[Instantiate ERROR] Algorithm class is None (decorator returned None?)")
+        return
+    try:
+        alg = instantiate_method(alg_cls, values_list)
+    except Exception as e:
+        print(f"[Instantiate ERROR] {getattr(alg_cls,'__name__',alg_cls)}: {e}")
+        return
+    try:
+        alg.run()
+    except Exception as e:
+        print(f"[Run ERROR] {alg_cls.__name__}: {e}")
 
 def choices(x):
     if x == 1:
-        run_algorithm(Pitt_perm.PittPermMethod, iterations=100, population_size=10, pm_swap=0.01, pm_transposition=0.01, show_chart=True)
+        run_algorithm(Pitt_perm.PittPermMethod, values_list=[100, 10, 0.01, 0.01, False])
         time.sleep(1)
     elif x == 2:
-        run_algorithm(Pitt_direct.PittDirectMethod, iterations=100, population_size=10, crossover_points = 1, mutation_probability = 0.01, show_chart=True)
+        run_algorithm(Pitt_direct.PittDirectMethod, values_list=[100, 10, 1, 0.01, False])
         time.sleep(1)
     elif x == 3:
-        run_algorithm(Michigan.MichiganMethod, iterations=100, pm=0.01, show_chart=True)
+        run_algorithm(Michigan.MichiganMethod, values_list=[100, 0.01, False])
         time.sleep(1)
     elif x == 4:
-        run_algorithm(Dragonfly.DragonflyMethod, iterations=100, population_size=30, w_inertia=0.9, w_separation=0.1, w_alignment=0.1, w_cohesion=0.1, w_food=2.0, w_enemy=1.0, neighbour_radius_factor=0.5, show_chart=True)
+        run_algorithm(Dragonfly.DragonflyMethod, values_list=[100, 30, 0.9, 0.1, 0.1, 0.1, 2.0, 1.0, 0.5, False])
     elif x == 5:
-        run_algorithm(Fruitfly.FruitflyMethod, iterations=100, population_size=10, show_chart=True)
+        run_algorithm(Fruitfly.FruitflyMethod, values_list=[100, 10, 5, False])
         time.sleep(1)
     elif x == 6:
         Common.scheduling_mode = Common.ENERGY_MODE if Common.scheduling_mode == Common.MAKESPAN_MODE else Common.MAKESPAN_MODE

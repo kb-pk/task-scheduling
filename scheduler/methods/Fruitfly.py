@@ -1,18 +1,23 @@
 import numpy as np
 import scheduler.Common as Common
 from .BaseMethod import BaseMethod, Lang
+from scheduler.Parametrs import ParamDef, register_method
 
+@register_method
 class FruitflyMethod(BaseMethod):
-    """
-    Implementacja klasowa Fruitfly (dwufazowy: smell + vision) wykorzystująca wspólne utilsy.
-    """
+    PARAM_DEFS = [
+        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
+        ParamDef("population_size", "int", 30, "Population size", min_value=2),
+        ParamDef("vision_step", "float", 5.0, "Vision phase standard deviation", min_value=0.0, max_value=100.0),
+        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
+    ]
+
     def __init__(self,
                  iterations=100,
                  population_size=30,
                  vision_step=5.0,
                  show_chart=True):
-        super().__init__(show_chart=show_chart)
-        self.iterations = iterations
+        super().__init__(iterations=iterations, show_chart=show_chart)
         self.population_size = population_size
         self.vision_step = vision_step
         self.population = None
@@ -62,13 +67,6 @@ class FruitflyMethod(BaseMethod):
         for task_id, m_id in enumerate(assign):
             schedule_map[int(m_id)].append(task_id)
         return schedule_map
-
-    def after_run(self, schedule_map, makespan, total_energy):
-        primary = total_energy if Common.scheduling_mode == Common.ENERGY_MODE else makespan
-        secondary = makespan if Common.scheduling_mode == Common.ENERGY_MODE else total_energy
-        with open("results/result_fruitfly", "a") as f:
-            f.write(f"{primary},{secondary}\n")
-
 
 if __name__ == "__main__":
     alg = FruitflyMethod(iterations=100, population_size=30, vision_step=5.0, show_chart=True)

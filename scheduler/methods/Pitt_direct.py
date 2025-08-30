@@ -1,56 +1,29 @@
 from __future__ import annotations
 import random
 from typing import List, Tuple, Dict
-
 import numpy as np
 
 import scheduler.Common as Common
 from .BaseMethod import BaseMethod, Lang
+from scheduler.Parametrs import ParamDef, register_method
 
-
+@register_method
 class PittDirectMethod(BaseMethod):
-    """
-    Algorytm GA (Pitt – reprezentacja bezpośrednia) w schemacie BaseMethod.
+    PARAM_DEFS = [
+        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
+        ParamDef("population_size", "int", 10, "Population size (must be even)", min_value=2),
+        ParamDef("crossover_points", "int", 1, "Number of crossover points", min_value=1),
+        ParamDef("mutation_probability", "float", 0.01, "Gene mutation probability", min_value=0.0, max_value=1.0),
+        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
+    ]
 
-    Reprezentacja osobnika:
-      - Lista length = liczba zadań.
-      - Pozycja i = ID zadania i.
-      - Wartość na pozycji i = ID maszyny wykonującej zadanie i.
-
-    Ograniczenia:
-      - Każde zadanie przypisane do jednej maszyny spełniającej wymagania bezpieczeństwa.
-      - Dodatkowo (walidacja): każdy osobnik musi zawierać przynajmniej jedną instancję
-        każdego machine_id (żadna maszyna nie może pozostać bez zadania).
-
-    Operatory:
-      - Crossover: n‑punktowy (NUMBER_OF_CROSSOVER_POINTS), wymiana segmentów między dwiema listami.
-      - Mutacja: z prawdopodobieństwem pm zmiana genu na inny machine_id (jeśli bieżący machine_id
-        występuje w chromosomie co najmniej dwa razy, aby nie pozbawić maszyny wszystkich zadań).
-        (Zachowane zachowanie oryginału – bez dodatkowej kontroli zgodności z wymaganiami zadania.)
-
-    Ocena:
-      - Makespan = max czas obciążenia maszyn.
-      - Energia = suma (busy*P_busy + idle*P_idle).
-      - W zależności od Common.scheduling_mode metryka główna to makespan albo energia.
-
-    Wynik:
-      - build_schedule_map() tworzy mapę {machine_id: [task_ids]} w kolejności indeksów zadań.
-    """
     def __init__(self,
                  iterations: int = 100,
                  population_size: int = 10,
                  crossover_points: int = 1,
                  mutation_probability: float = 0.01,
                  show_chart: bool = True):
-        """
-        :param iterations: liczba epok
-        :param population_size: liczebność populacji (wymagana parzysta)
-        :param crossover_points: liczba punktów krzyżowania (>=1)
-        :param mutation_probability: prawdopodobieństwo mutacji genu
-        :param show_chart: rysowanie wykresu po zakończeniu
-        """
-        super().__init__(show_chart=show_chart)
-        self.iterations = iterations
+        super().__init__(iterations=iterations, show_chart=show_chart)
         self.population_size = population_size
         self.crossover_points = crossover_points
         self.pm = mutation_probability
