@@ -14,6 +14,7 @@ import random
 import csv
 from collections import Counter
 
+import scheduler.Utils as Utils
 import scheduler.Common as Common
 
 ITERATIONS_NUMBER = 100
@@ -463,15 +464,20 @@ def schedule_tasks(number_of_iterations, population_size):
     save_results_to_file("results/results_pitt_direct.csv", best_adaptation_rate, best_schedule, len(machines), etc_matrix)
     if Common.scheduling_mode == Common.MAKESPAN_MODE:
         print("Best makespan value: " + "{0:.2f}".format(best_adaptation_rate) + " energy usage: " + "{0:.2f}".format(other_for_best))
+        max_time = best_adaptation_rate
+        total_energy = other_for_best
     elif Common.scheduling_mode == Common.ENERGY_MODE:
         print("Best energy usage: " + "{0:.2f}".format(best_adaptation_rate) + " makespan: " + "{0:.2f}".format(other_for_best))
+        max_time = other_for_best
+        total_energy = best_adaptation_rate
+
     open('results/result_pitt_direct', 'a').write(str(best_adaptation_rate) + "," + str(other_for_best) + "\n")
 
-    if Common.scheduling_mode == Common.MAKESPAN_MODE:
-        max_time = best_adaptation_rate
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
-        max_time = other_for_best
-    pretty_print(best_schedule, etc_matrix, machines, max_time)
+    schedule_map = {m_id: [] for m_id in range(len(machines))}
+    for task_id, machine_id in enumerate(best_schedule):
+        schedule_map[machine_id].append(task_id)
+        
+    Utils.display_results(schedule_map, etc_matrix, machines, max_time, total_energy)
     write_to_csv(best_adaptation_rate, best_schedule, etc_matrix, machines, max_time)
 
 

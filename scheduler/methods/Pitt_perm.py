@@ -5,6 +5,7 @@ from sklearn.utils import shuffle
 import random
 import math
 import scheduler.Common as Common
+import scheduler.Utils as Utils
 
 ITERATIONS_NUMBER = 100
 POPULATION_SIZE = 10
@@ -602,11 +603,27 @@ def main():
         # (bezpieczne zamkniecie)
         pass
 
+    # wyznaczenie makespan i energii w zunifikowany sposób
     if Common.scheduling_mode == Common.MAKESPAN_MODE:
         max_time = best_score
-    elif Common.scheduling_mode == Common.ENERGY_MODE:
+        total_energy = other_param
+    else:  # ENERGY_MODE
         max_time = other_param
-    pretty_print(best_individual, etc, machines, max_time)
+        total_energy = best_score
+
+    # budowa schedule_map z reprezentacji (tasks_sequence, machines_chromosome)
+
+    tasks_sequence, machines_chromosome = best_individual
+    schedule_map = {m_id: [] for m_id in range(len(machines_chromosome))}
+    offset = 0
+    for m_id, count in enumerate(machines_chromosome):
+        slice_tasks = tasks_sequence[offset:offset+count]
+        schedule_map[m_id].extend(slice_tasks)
+        offset += count
+
+    # tekstowe podsumowanie + wykres Gantta (spójnie z Pitt_direct)
+    Utils.display_results(schedule_map, etc, machines, max_time, total_energy)
+
     write_to_csv(best_score, best_individual, etc, machines, max_time)
 
 
