@@ -154,3 +154,4 @@ fabric.properties
 # custom
 results/
 .vscode/
+.DS_Store
