@@ -2,49 +2,6 @@ import numpy as np
 import scheduler.Common as Common
 from .BaseMethod import BaseMethod, Lang
 
-description = {
-    "pl": """
-    Algorytm optymalizacyjny Dragonfly. Rodzaj algorytmu optymalizacyjnego particle swarm.
-
-    Algorytm polega na zdefiniowaniu w przestrzeni poszukiwań miejsc z jedzeniem (najlepszym rozwiązaniem z poprzedniej epoki) i z wrogami (najgorszym rozwiązaniem z poprzedniej epoki).
-    Poziom przyciągania do źródeł jedzenia i odpychania od wrogów jest dyktowany parametrami.
-
-    Osobniki w pobliżu (próg określony parametrem) tworzą sąsiedztwo danego osobnika.
-
-    Dodatkowo zdefiniowane są parametry (wagi) w postaci:
-    1. Bezwładności osobników (inertia)
-    2. Separacji osobników od siebie (separation),
-    3. Poruszania się z podobną prędkością co reszta osobników (alignment),
-    4. Poruszania się w stronę centrum swojego sąsiedztwa (cohesion).
-
-    Przestrzeń poszukiwań można sobie wyobrazić jako N-wymiarową (M = liczba zadań) przestrzeń z osobnikami "latającymi" wewnątrz niej zgodnie z ustalonymi parametrami.
-    Pozycja (koordynaty) osobników wyrażają harmonogram w postaci [machine_id, machine_id, ...], gdzie indeks to numer zadania wykonywanego przez maszynę.
-
-    Przykładowo, dla 3 zadań osobniki "latają" po 3-wymiarowej przestrzeni, gdzie ich koordynaty to harmonogram wszystkich maszyn.
-    """,
-
-    "en": """
-    Dragonfly optimisation algorithm. A type of particle swarm optimisation algorithm.
-
-    Algorithm defines places with food (best solution from last epoch) and enemies (worst solution from last epoch) in the search space.
-    Levels of attraction toward food sources and repulsion from enemies are defined with parameters.
-
-    Entities close (threshold is defined with a parameter) to the specific entity are considered its neighbourhood.
-
-    Additionally, the following parameters (weights) are defined:
-    1. Inertia of entities,
-    2. Separation of entities from each other,
-    3. Alignment of the entity in terms of speed with the rest of entities,
-    4. Cohesion of entities in terms of being drawn to the center of their neighbourhood.
-
-    The search space can be visualised as a N-dimensional (N = task number) space with the entities "flying" inside of it according to the defined parameters.
-    Entity's position (its coordinates) represent a schedule in the form of [machine_id, machine_id, ...], where the index denotes the task number assigned to the machine.
-
-    For example, for 3 machines the entities "fly" through a 3-dimensional space, where each entity's coordinates are a schedule for all the machines.
-    """
-}
-
-
 class DragonflyMethod(BaseMethod):
     """
     Implementacja klasowa Dragonfly wykorzystująca wspólne utilsy w Common.
@@ -80,9 +37,6 @@ class DragonflyMethod(BaseMethod):
 
     def get_method_name(self):
         return "dragonfly"
-
-    def get_method_description(self, lang: Lang):
-        return description["pl"] if lang == Lang.PL else description["en"]
 
     # --- lifecycle ---
     def initialize(self):

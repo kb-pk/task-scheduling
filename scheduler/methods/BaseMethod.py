@@ -3,6 +3,7 @@ import scheduler.Common as Common
 import csv
 import numpy as np
 from enum import Enum
+import json, os
 
 class Lang(Enum):
     PL = 0
@@ -21,6 +22,9 @@ class BaseMethod(ABC):
       - build_schedule_map(solution) -> dict {machine_id: [task_ids]}
       - after_run(schedule_map, makespan, total_energy) (opcjonalnie)
     """
+
+    _DESCRIPTIONS_CACHE = None
+
     def __init__(self, show_chart=True):
         self.features = Common.read_security_features()
         self.machines = Common.read_machines(self.features)
@@ -33,10 +37,24 @@ class BaseMethod(ABC):
         """Zwraca nazwę metody."""
         ...
 
-    @abstractmethod
     def get_method_description(self, lang: Lang):
-        """Zwraca opis metody."""
-        ...
+        """
+        Wspólne pobieranie opisu z pliku data/descriptions.json na podstawie nazwy metody.
+        :param lang: Lang.PL / Lang.EN
+        :return: opis (str) lub placeholder gdy brak
+        """
+        if BaseMethod._DESCRIPTIONS_CACHE is None:
+            # plik w katalogu root/data; bieżący plik = scheduler/methods/BaseMethod.py
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            path = os.path.join(base_dir, "data", "descriptions.json")
+            with open(path, "r", encoding="utf-8") as f:
+                BaseMethod._DESCRIPTIONS_CACHE = json.load(f)
+
+        key = self.get_method_name()
+
+        block = BaseMethod._DESCRIPTIONS_CACHE.get(key, {})
+        txt = block.get("pl" if lang == Lang.PL else "en", "").strip()
+        return txt if txt else f"(No description for method '{self.get_method_name()}' and lang {lang.name})"
 
     @abstractmethod
     def initialize(self):

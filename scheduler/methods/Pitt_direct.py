@@ -66,39 +66,6 @@ class PittDirectMethod(BaseMethod):
     def get_method_name(self) -> str:
         return "pitt_direct"
 
-    def get_method_description(self, lang: Lang):
-        if lang == Lang.PL:
-            return (
-                """
-                Algorytm oparty o podejście Pitt, reprezentacja bezpośrednia.
-                    
-                Osobnik - reprezentacja konkretnego harmonogramu zadań dla wszystkich maszyn. Składa się z 1 chromosomu.
-                Chromosom - harmonogram zadań dla wszystkich maszyn. Składa się z N (liczba zadań) genów.
-                Gen - reprezentacja maszyny (machine_id). Indeks genu w chromosomie to numer zadania przypisanego do maszyny. Geny mogą powtarzać się w chromosomie.
-                
-                Selekcja - brak selekcji pomiędzy epokami.
-                
-                Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
-                
-                Mutacja - losowanie nowej wartości genu (machine_id) wewnątrz chromosomu.
-                """
-            )
-        return (
-            """
-            Algorithm based on the Pitt approach, direct representation.
-            
-            Entity - a representation of a particular schedule of tasks for all machines. Made up of 1 chromosome.
-            Chromosome - a particular schedule of tasks for all machines. Made up of N (task number) genes.
-            Gene - a representation of a machine (machine_id). The index of a gene in a chromosome is a number of a task that's assigned to this machine. Genes can repeat in the chromosome.
-            
-            Selection - no selection between epochs.
-            
-            Crossover - n-point, every entity takes part.
-            
-            Mutation - a gene's value (machine_id) is replaced with a new, randomly generated one.
-            """
-        )
-
     # ---------- Cykl życia ----------
 
     def initialize(self):

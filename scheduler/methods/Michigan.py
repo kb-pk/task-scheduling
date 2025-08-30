@@ -44,41 +44,6 @@ class MichiganMethod(BaseMethod):
         """
         return "michigan"
 
-    def get_method_description(self, lang: Lang):
-        """
-        Opis tekstowy algorytmu w wybranym języku.
-        :param lang: Lang.PL lub Lang.EN
-        :return: opis (str)
-        """
-        if lang == Lang.PL:
-            return """
-                Algorytm oparty o podejście Michigan.
-                
-                Osobnik - reprezentacja pojedynczej maszyny z pakietu maszyn. Składa się z 1 chromosomu.
-                Chromosom - reprezentacja przypisanego do osobnika (maszyny) zestawu zadań.
-                Gen - reprezentacja pojedynczego zadania z pakietu zadań. 
-
-                Selekcja - brak selekcji pomiędzy epokami.
-                
-                Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
-                
-                Mutacja - mieszanie (shuffle) genów (zadań) w chromosomie.
-                """.strip()
-        elif lang == Lang.EN:
-            return """
-                Algorithm based on the Michigan approach.
-                
-                Entity - a representation of a single machine from the machine array (one chromosome).
-                Chromosome - tasks assigned to the entity (machine).
-                Gene - a single task index.
-                
-                Selection - none between epochs.
-                
-                Crossover - n-point, every entity participates.
-                
-                Mutation - shuffling of genes (tasks) inside the chromosome.
-                """.strip()
-
     def initialize(self):
         """
         Buduje populację początkową oraz wyznacza jej ocenę,

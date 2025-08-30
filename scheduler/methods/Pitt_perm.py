@@ -86,46 +86,6 @@ class PittPermMethod(BaseMethod):
         """
         return "pitt_perm"
 
-    def get_method_description(self, lang: Lang):
-        """
-        Opis algorytmu w wybranym języku.
-        """
-        if lang == Lang.PL:
-            return (
-                """
-                Algorytm oparty o podejście Pitt, reprezentacja permutowana.
-
-                Osobnik - reprezentacja konkretnego harmonogramu zadań dla wszystkich maszyn. Składa się z 2 chromosomów.
-                Chromosom 1 - lista zadań w konkretnej kolejności. Składa się z N (liczba zadań) genów.
-                Chromosom 2 - liczba zadań z chromosomu 1 przypisanych do maszyn. Składa się z M (liczba maszyn) genów.
-                Gen (chromosom 1) - pojedyncze zadanie z listy zadań.
-                Gen (chromosom 2) - liczba zadań przypisanych do konkretnej maszyny. Indeks genu w chromosomie definiuje maszynę (machine_id).
-
-                Selekcja - brak selekcji pomiędzy epokami.
-
-                Krzyżowanie - PMX (partial mapped crossover), CX (cycle crossover), OX (ordered crossover). Każdy osobnik bierze udział.
-
-                Mutacja - S (swap mutation - zamiana zadań pomiędzy maszynami) i T (transposition mutation - przeniesienie zadania jednej maszyny do harmonogramu drugiej).
-                """
-            )
-        return (
-            """
-            Algorithm based on the Pitt approach, permutated representation.
-
-            Entity - a representation of a particular schedule of tasks for all machines. Made up of 2 chromosomes.
-            Chromosome 1 - array of tasks in a specific order. Made up of N (task number) genes.
-            Chromosome 2 - number of tasks (taken from chromosome 1) assigned to machines. Made up of M (machine number) genes.
-            Gene (chromosome 1) - a single task from the task array.
-            Gene (chromosome 2) - number of tasks assigned to a specific machine. The index of the gene in a chromosome defined the machine (machine_id).
-
-            Selection - no selection between epochs.
-
-            Crossover - PMX (partial mapped crossover), CX (cycle crossover), OX (ordered crossover). Every entity takes part.
-
-            Mutation - S (swap mutation - swaps tasks between machines) i T (transposition mutation - moves a task from one machine's schedule to another's).
-            """
-        )
-
     # ------------------------------------------------------------
     # Cykl życia (BaseMethod hooki)
     # ------------------------------------------------------------
