@@ -3,7 +3,7 @@ from .methods import Pitt_direct
 from .methods import Pitt_perm
 from .methods import Dragonfly
 from .methods import Fruitfly
-from .methods.BaseMethod import BaseMethod
+from .methods.BaseMethod import BaseMethod, Mode
 from . import Common
 
 import time
@@ -33,6 +33,8 @@ def run_algorithm(alg_cls: Type[BaseMethod], values_list=None, *, auto_outputs=T
 def choices(x):
     if x == 1:
         run_algorithm(Pitt_perm.PittPermMethod, values_list=[100, 10, 0.01, 0.01, False])
+        current_algorithm.plot_gantt_chart(Mode.MAKESPAN)
+        current_algorithm.plot_gantt_chart(Mode.ENERGY)
         time.sleep(1)
     elif x == 2:
         run_algorithm(Pitt_direct.PittDirectMethod, values_list=[100, 10, 1, 0.01, False])

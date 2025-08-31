@@ -13,6 +13,10 @@ class Lang(Enum):
     PL = 0
     EN = 1
 
+class Mode(Enum):
+    MAKESPAN = 0
+    ENERGY = 1
+
 class BaseMethod(ABC):
 
     _DESCRIPTIONS_CACHE = None
@@ -227,10 +231,17 @@ class BaseMethod(ABC):
                     print(f"    - Task {t} (time {d:.2f}, energy {e:.2f})")
             print("-" * 30)
 
-    def plot_gantt_chart(self):
+    def plot_gantt_chart(self, mode):
         if self.last_schedule_map is None or self.last_makespan is None:
             print("[WARN] No schedule to plot (run method first).")
             return
+        
+        if mode == Mode.MAKESPAN:
+            self._plot_gantt_chart_makespan()
+        elif mode == Mode.ENERGY:
+            self._plot_gantt_chart_energy()
+
+    def _plot_gantt_chart_makespan(self):
         schedule_map = self.last_schedule_map
         makespan = self.last_makespan
 
@@ -270,3 +281,61 @@ class BaseMethod(ABC):
         plt.savefig(out_path)
         print(f"Saved Gantt chart to: {out_path}")
         plt.show()
+
+    def _plot_gantt_chart_energy(self):
+            if self.last_schedule_map is None:
+                print("[WARN] No schedule to plot (run method first).")
+                return
+
+            schedule_map = self.last_schedule_map
+
+            # Compute per-task energies and per-machine cumulative busy energy
+            machine_busy_energy = []
+            for m_id in sorted(schedule_map.keys()):
+                busy_e = 0.0
+                for task_id in schedule_map[m_id]:
+                    duration = self.etc[task_id][m_id]
+                    busy_e += duration * self.machines.loc[m_id, 'P_busy']
+                machine_busy_energy.append(busy_e)
+            max_busy_energy = max(machine_busy_energy) if machine_busy_energy else 0.0
+
+            MAX_WIDTH_INCHES = 100
+            fig_width = min(max(15, max_busy_energy / 500 if max_busy_energy else 15), MAX_WIDTH_INCHES)
+            fig_height = max(6, len(schedule_map) * 0.5)
+            fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+            num_tasks = len(self.etc)
+            colors = cm.viridis(np.linspace(0, 1, num_tasks))
+
+            for machine_id in sorted(schedule_map.keys()):
+                current_energy = 0.0
+                for task_id in schedule_map[machine_id]:
+                    duration = self.etc[task_id][machine_id]
+                    energy = duration * self.machines.loc[machine_id, 'P_busy']
+                    ax.barh(machine_id,
+                            energy,
+                            left=current_energy,
+                            height=0.6,
+                            align='center',
+                            color=colors[task_id],
+                            edgecolor='black')
+                    current_energy += energy
+
+            ax.set_yticks(sorted(schedule_map.keys()))
+            ax.set_yticklabels([f"Machine {m}" for m in sorted(schedule_map.keys())])
+            ax.invert_yaxis()
+            ax.set_xlabel('Energy')
+            ax.set_title(f'Schedule (Energy Gantt) - {self.get_method_name()}')
+            ax.grid(True, linestyle='--', linewidth=0.5)
+
+            # Vertical line at max busy energy
+            ax.axvline(max_busy_energy, color='red', linestyle='--', linewidth=1.2)
+            ax.text(max_busy_energy, 0.5, f'Max busy energy: {max_busy_energy:.2f}',
+                    rotation=90, va='bottom', ha='left',
+                    color='red', fontsize=9, backgroundcolor='white')
+
+            plt.tight_layout()
+            out_path = f"results/gantt_{self.get_method_name()}_energy.png"
+            plt.savefig(out_path)
+            print(f"Saved Gantt energy chart to: {out_path}")
+            plt.show()
