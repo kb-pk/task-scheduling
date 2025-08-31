@@ -34,6 +34,13 @@ class PittDirectMethod(BaseMethod):
         self.best_score: float | None = None
         self.other_score: float | None = None
 
+    def set_parameters(self, iterations=100, population_size=10, crossover_points=1, mutation_probability=0.01, show_chart=True):
+        self.iterations = iterations
+        self.population_size = population_size
+        self.crossover_points = crossover_points
+        self.pm = mutation_probability
+        self.show_chart = show_chart
+
     # ---------- Identyfikacja / opis ----------
 
     def get_method_name(self) -> str:

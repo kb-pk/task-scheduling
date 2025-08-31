@@ -46,6 +46,21 @@ class DragonflyMethod(BaseMethod):
         self.best_score = None
         self.other_score = None
 
+    def set_parameters(self, iterations=100, population_size=30, w_inertia=0.9, w_separation=0.1,
+                       w_alignment=0.1, w_cohesion=0.1, w_food=2.0, w_enemy=1.0,
+                       neighbour_radius_factor=0.5, show_chart=True):
+        self.iterations = iterations
+        self.population_size = population_size
+        self.w_inertia = w_inertia
+        self.w_separation = w_separation
+        self.w_alignment = w_alignment
+        self.w_cohesion = w_cohesion
+        self.w_food = w_food
+        self.w_enemy = w_enemy
+        self.neighbour_radius_factor = neighbour_radius_factor
+        self.neighbour_radius_thresh = neighbour_radius_factor * (len(self.machines) - 1)
+        self.show_chart = show_chart
+
     def get_method_name(self):
         return "dragonfly"
 

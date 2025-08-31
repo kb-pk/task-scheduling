@@ -8,21 +8,25 @@ from . import Common
 
 import time
 from typing import Optional, Type
-from .Parametrs import instantiate_method
+from .Parametrs import get_or_set_method
 
 current_algorithm: Optional[BaseMethod] = None
 
-def run_algorithm(alg_cls, values_list=None):
-    if alg_cls is None:
-        print("[Instantiate ERROR] Algorithm class is None (decorator returned None?)")
-        return
+def run_algorithm(alg_cls: Type[BaseMethod], values_list=None, *, auto_outputs=True):
+    """
+    Reuse singleton:
+      - create if none
+      - else update ALL params (set_parameters) z listy
+      - run()
+    """
+    global current_algorithm
     try:
-        alg = instantiate_method(alg_cls, values_list)
+        current_algorithm = get_or_set_method(alg_cls, values_list)
     except Exception as e:
-        print(f"[Instantiate ERROR] {getattr(alg_cls,'__name__',alg_cls)}: {e}")
+        print(f"[Param ERROR] {getattr(alg_cls,'__name__',alg_cls)}: {e}")
         return
     try:
-        alg.run()
+        current_algorithm.run()
     except Exception as e:
         print(f"[Run ERROR] {alg_cls.__name__}: {e}")
 

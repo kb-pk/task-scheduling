@@ -2,7 +2,6 @@ import csv
 from random import randint
 import numpy as np
 import pandas as pd
-from sklearn.utils import shuffle
 
 from .BaseMethod import BaseMethod
 from .BaseMethod import Lang
@@ -24,6 +23,11 @@ class MichiganMethod(BaseMethod):
         self.best_population = None    # najlepsza znaleziona populacja (DataFrame)
         self.best_score = None         # wartość optymalizowanej metryki (lower = better)
         self.other_score = None        # druga metryka (informacyjnie)
+
+    def set_parameters(self, iterations=100, pm=0.01, show_chart=True):
+        self.iterations = iterations
+        self.pm = pm
+        self.show_chart = show_chart
 
     def get_method_name(self):
         """
@@ -48,7 +52,7 @@ class MichiganMethod(BaseMethod):
           3. Ocena (sortowanie) nowej populacji.
           4. Aktualizacja najlepszego rozwiązania.
         """
-        for _ in range(self.iterations):
+        for epoch in range(self.iterations):
             crossed = self._cross(self.population)
             mutated = self._mutation(crossed, self.pm)
             mutated, current_score, other = self._sort_population(mutated)
@@ -56,6 +60,10 @@ class MichiganMethod(BaseMethod):
                 self.best_population = mutated.copy()
                 self.best_score = current_score
                 self.other_score = other
+                if Common.scheduling_mode == Common.MAKESPAN_MODE:
+                    print(f"[{epoch}] New best makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
+                else:
+                    print(f"[{epoch}] New best energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
             self.population = mutated
     
     def get_best_solution(self):
@@ -153,9 +161,9 @@ class MichiganMethod(BaseMethod):
         :param population: DataFrame populacji
         :return: (top_df, bottom_df)
         """
-        parts = np.array_split(population, 2)
-        top = shuffle(parts[0])
-        bottom = shuffle(parts[1])
+        mid = len(population) // 2
+        top = population.iloc[:mid].sample(frac=1)       # pandas-native shuffle
+        bottom = population.iloc[mid:].sample(frac=1)
         return top, bottom
 
     def _cross(self, population):

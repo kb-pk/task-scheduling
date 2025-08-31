@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, List, Optional, Type, Dict, Callable
 from .methods.BaseMethod import BaseMethod
-import inspect
 
 _CASTERS: Dict[str, Callable[[Any], Any]] = {
     "int": int,
@@ -27,7 +26,6 @@ class ParamDef:
             val = caster(raw)
         except Exception as e:
             raise ValueError(f"Parameter '{self.name}': cannot cast value '{raw}' to {self.ptype} ({e})") from e
-
         if isinstance(val, (int, float)):
             if self.min_value is not None and val < self.min_value:
                 raise ValueError(f"Parameter '{self.name}' is below minimum {self.min_value} (got {val})")
@@ -35,60 +33,49 @@ class ParamDef:
                 raise ValueError(f"Parameter '{self.name}' is above maximum {self.max_value} (got {val})")
         return val
 
-def _signature_param_names(method_cls: Type[BaseMethod]) -> set[str]:
-    try:
-        sig = inspect.signature(method_cls.__init__)
-    except (ValueError, TypeError):
-        return set()
-    names = set()
-    for n, p in sig.parameters.items():
-        if n == "self":
-            continue
-        names.add(n)
-    return names
-
-def instantiate_method(method_cls: Type[BaseMethod], values_list: Optional[List[Any]] = None) -> BaseMethod:
+def _build_kwargs(method_cls: Type[BaseMethod], values_list: Optional[List[Any]]) -> Dict[str, Any]:
     if not hasattr(method_cls, "PARAM_DEFS"):
         raise ValueError(f"{method_cls.__name__} missing PARAM_DEFS attribute")
-
     specs: List[ParamDef] = getattr(method_cls, "PARAM_DEFS")
     if not isinstance(specs, list) or any(not isinstance(s, ParamDef) for s in specs):
         raise ValueError(f"{method_cls.__name__}.PARAM_DEFS must be a list[ParamDef]")
-
     if values_list is None:
         values_list = [s.default for s in specs]
-
     if len(values_list) != len(specs):
         expected = [(s.name, s.default) for s in specs]
         raise ValueError(
             f"Parameter count mismatch: provided {len(values_list)} vs expected {len(specs)}. "
             f"Expected order: {expected}"
         )
-
     kwargs: Dict[str, Any] = {}
     for spec, raw in zip(specs, values_list):
+        kwargs[spec.name] = spec.cast(raw)
+    return kwargs
+
+def get_or_set_method(method_cls: Type[BaseMethod], values_list: Optional[List[Any]] = None) -> BaseMethod:
+    """
+    Singleton accessor:
+      - Brak instancji: tworzy (ctor z kwargs)
+      - Istnieje instancja: woła set_parameters(**kwargs) aby nadpisać WSZYSTKIE parametry
+    """
+    kwargs = _build_kwargs(method_cls, values_list)
+    inst = getattr(method_cls, "_singleton_instance", None)
+    if inst is None:
         try:
-            kwargs[spec.name] = spec.cast(raw)
-        except ValueError as e:
-            # Re-raise with context preserved
-            raise ValueError(f"Error casting parameter '{spec.name}': {e}") from e
-
-    ctor_params = _signature_param_names(method_cls)
-    unknown = set(kwargs.keys()) - ctor_params
-    if unknown:
-        pass
-
-    try:
-        return method_cls(**kwargs)
-    except TypeError as e:
-        raise ValueError(
-            f"Failed to instantiate {method_cls.__name__} with kwargs {kwargs}. "
-            f"TypeError: {e}"
-        ) from e
-    except Exception as e:
-        raise ValueError(
-            f"Unexpected error while instantiating {method_cls.__name__}: {e}"
-        ) from e
+            inst = method_cls(**kwargs)
+        except TypeError as e:
+            raise ValueError(f"Constructor mismatch for {method_cls.__name__}: {e}") from e
+        except Exception as e:
+            raise ValueError(f"Unexpected error while instantiating {method_cls.__name__}: {e}") from e
+        setattr(method_cls, "_singleton_instance", inst)
+    else:
+        try:
+            inst.set_parameters(**kwargs)
+        except TypeError as e:
+            raise ValueError(f"set_parameters signature mismatch in {method_cls.__name__}: {e}") from e
+        except Exception as e:
+            raise ValueError(f"set_parameters failed in {method_cls.__name__}: {e}") from e
+    return inst
 
 def get_method_param_defs(method_cls: Type[BaseMethod]) -> List[ParamDef]:
     defs = getattr(method_cls, "PARAM_DEFS", [])

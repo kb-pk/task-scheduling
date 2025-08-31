@@ -25,6 +25,12 @@ class FruitflyMethod(BaseMethod):
         self.best_score = None
         self.other_score = None
 
+    def set_parameters(self, iterations=100, population_size=30, vision_step=5.0, show_chart=True):
+        self.iterations = iterations
+        self.population_size = population_size
+        self.vision_step = vision_step
+        self.show_chart = show_chart
+
     def get_method_name(self):
         return "fruitfly"
 
