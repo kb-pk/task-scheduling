@@ -9,6 +9,10 @@ from scheduler.ProgramState import ProgramState
 from scheduler.methods.IndividualFitness import IndividualFitness
 
 
+class Mode(Enum):
+    MAKESPAN = 0
+    ENERGY = 1
+
 class BaseMethod(ABC):
     def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
         self.PARAM_DEFS = []
