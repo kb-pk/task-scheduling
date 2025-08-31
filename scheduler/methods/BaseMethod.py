@@ -103,18 +103,27 @@ class BaseMethod(ABC):
         self.last_makespan = makespan
         self.last_total_energy = total_energy
     
-    def _compute_metrics(self, schedule_map):
+    def _makespan(self, schedule_map, machine_times):
         machine_times = [0.0] * len(self.machines)
         for m_id, tasks in schedule_map.items():
             for t in tasks:
                 machine_times[m_id] += self.etc[t][m_id]
         makespan = max(machine_times) if machine_times else 0.0
+        return makespan
+
+    def _energy(self, makespan, machine_times):
         total_energy = 0.0
         for m_id, busy in enumerate(machine_times):
             busy_e = busy * self.machines.loc[m_id, 'P_busy']
             idle_e = (makespan - busy) * self.machines.loc[m_id, 'P_idle']
             total_energy += busy_e + idle_e
-        return makespan, total_energy
+        return total_energy
+
+    def _compute_metrics(self, schedule_map):
+        machine_times = [0.0] * len(self.machines)
+        makespan = self._makespan(schedule_map, machine_times)
+        energy = self._energy(makespan, machine_times)
+        return makespan, energy
 
     def _format_task_cell(self, task_id: int, machine_id: int) -> str:
         """
