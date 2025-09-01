@@ -9,11 +9,6 @@ ENERGY_MODE = 1
 scheduling_modes = {MAKESPAN_MODE:"makespan", ENERGY_MODE:"energy"}
 scheduling_mode = 0
 
-MAKESPAN_O_MODE = 0
-ENERGY_O_MODE = 1
-ALL_O_MODE = 2
-output_modes = {MAKESPAN_O_MODE:"makespan", ENERGY_O_MODE:"energy", ALL_O_MODE:"all"}
-output_mode = 0
 
 def prepare_results_directory():
     """
