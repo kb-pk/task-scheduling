@@ -7,6 +7,7 @@ from lang.Lang import T
 from scheduler.Logger import Logger
 from scheduler.Parameters import ParamDef
 from scheduler.ProgramState import ProgramState
+from scheduler.methods.IndividualFitness import IndividualFitness
 
 
 class BaseMethod(ABC):
@@ -106,11 +107,15 @@ class BaseMethod(ABC):
 
         return total_energy
 
-    def _fitness_function(self, schedule_map):
-        match Common.scheduling_mode:
-            case Common.MAKESPAN_MODE:
-                return self._makespan(schedule_map)
-            case Common.ENERGY_MODE:
-                return self._energy(schedule_map)
-            case _:
-                raise NotImplementedError
+    def _metrics(self, schedule_map):
+        makespan = self._makespan(schedule_map)
+        energy = self._energy(schedule_map)
+
+        return {
+            self.state.scheduling.State.makespan: makespan,
+            self.state.scheduling.State.energy: energy
+        }
+
+    def _fitness(self, schedule_map):
+        metrics = self._metrics(schedule_map)
+        return IndividualFitness(self.state, metrics)

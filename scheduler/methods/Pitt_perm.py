@@ -81,7 +81,7 @@ class PittPermMethod(BasePittMethod):
             offset += count
         return schedule_map
 
-    def _generate_machines_chromosome(self) -> List[int]:
+    def __generate_machines_chromosome(self) -> List[int]:
         n_tasks = len(self.tasks)
         n_machines = len(self.machines)
         tasks_per_machine = math.floor(n_tasks / n_machines)
@@ -91,7 +91,7 @@ class PittPermMethod(BasePittMethod):
             chrom[i] += 1
         return chrom
 
-    def _assign_tasks_to_machines(self, machines_chromosome: List[int]) -> Dict[int, List[int]]:
+    def __assign_tasks_to_machines(self, machines_chromosome: List[int]) -> Dict[int, List[int]]:
         machines_to_tasks = {m_id: [] for m_id in self.machines.index.values}
         # Zadania, które mają najmniej opcji – najpierw
         sorted_tasks = sorted(self._tasks_possible_machines.items(), key=lambda kv: len(kv[1]))
@@ -107,8 +107,8 @@ class PittPermMethod(BasePittMethod):
         return machines_to_tasks
 
     def _generate_individual(self):
-        machines_chromosome = self._generate_machines_chromosome()
-        machines_to_tasks = self._assign_tasks_to_machines(machines_chromosome)
+        machines_chromosome = self.__generate_machines_chromosome()
+        machines_to_tasks = self.__assign_tasks_to_machines(machines_chromosome)
         ret_tasks = []
         for tasks_list in machines_to_tasks.values():
             ret_tasks += tasks_list
@@ -118,11 +118,11 @@ class PittPermMethod(BasePittMethod):
     def _crossover_population(self):
         match True:
             case self.pmx:
-                crossover = self._partial_mapped_crossover
+                crossover = self.__partial_mapped_crossover
             case self.cx:
-                crossover = self._cycle_crossover
+                crossover = self.__cycle_crossover
             case self.ox:
-                crossover = self._ordered_crossover
+                crossover = self.__ordered_crossover
             case _:
                 raise NotImplementedError
 
@@ -138,7 +138,7 @@ class PittPermMethod(BasePittMethod):
 
         self.population = new_pop
 
-    def _partial_mapped_crossover(self, mom, dad):
+    def __partial_mapped_crossover(self, mom, dad):
         size = len(mom)
         start, end = sorted([random.randrange(size) for _ in range(2)])
 
@@ -164,7 +164,7 @@ class PittPermMethod(BasePittMethod):
 
         return daughter, son
 
-    def _cycle_crossover(self, mom, dad):
+    def __cycle_crossover(self, mom, dad):
         def __create_child(primary_parent, other_parent):
             cycle = []
 
@@ -194,7 +194,7 @@ class PittPermMethod(BasePittMethod):
 
         return daughter, son
 
-    def _ordered_crossover(self, mom, dad):
+    def __ordered_crossover(self, mom, dad):
         # długość osobnika (ilość zadań)
         size = len(mom)
 
@@ -245,41 +245,41 @@ class PittPermMethod(BasePittMethod):
     def _mutate_population(self):
         for individual in self.population:
             for index, _ in enumerate(individual[0]):
-                if self._check_swap_mutation():
-                    self._swap_mutation(individual, index)
-                if self._check_transposition_mutation():
-                    self._transposition_mutation(individual, index)
+                if self.__check_swap_mutation():
+                    self.__swap_mutation(individual, index)
+                if self.__check_transposition_mutation():
+                    self.__transposition_mutation(individual, index)
 
-    def _check_swap_mutation(self) -> bool:
+    def __check_swap_mutation(self) -> bool:
         """
         Czy wykonać mutację swap (porównanie z pm_swap).
         """
         return np.random.uniform(0.0, 1.0) <= self.pms
 
-    def _check_transposition_mutation(self) -> bool:
+    def __check_transposition_mutation(self) -> bool:
         """
         Czy wykonać mutację transposition (porównanie z pm_transposition).
         """
         return np.random.uniform(0.0, 1.0) <= self.pmt
 
-    def _swap_mutation(self, individual, gene_index):
+    def __swap_mutation(self, individual, gene_index):
         tasks_num = len(individual[0])
         j = np.random.randint(0, tasks_num)
-        machine_id = self._get_machine_number_for_task(individual, j)
+        machine_id = self.__get_machine_number_for_task(individual, j)
 
-        while gene_index == j or not self._can_run_task_on_machine(individual[0][gene_index], machine_id):
+        while gene_index == j or not self.__can_run_task_on_machine(individual[0][gene_index], machine_id):
             j = np.random.randint(0, tasks_num)
-            machine_id = self._get_machine_number_for_task(individual, j)
+            machine_id = self.__get_machine_number_for_task(individual, j)
 
         individual[0][gene_index], individual[0][j] = individual[0][j], individual[0][gene_index]
 
-    def _transposition_mutation(self, individual, gene_index):
+    def __transposition_mutation(self, individual, gene_index):
         pass
 
-    def _can_run_task_on_machine(self, task_id, machine_id):
+    def __can_run_task_on_machine(self, task_id, machine_id):
         return machine_id in self._tasks_possible_machines[task_id]
 
-    def _get_machine_number_for_task(self, individual, task_position):
+    def __get_machine_number_for_task(self, individual, task_position):
         counter = 0
         position_number = 0
         for machine in individual[1]:

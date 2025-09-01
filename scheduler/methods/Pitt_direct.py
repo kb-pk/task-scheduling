@@ -3,9 +3,9 @@ import random
 from typing import List, Tuple
 import numpy as np
 
-import scheduler.Common as Common
 from lang.Lang import T
 from scheduler.Logger import Logger
+from scheduler.MethodCache import MethodCache
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import MethodRegistrator
 from scheduler.Parameters import ParamDef2, ParamValueTypes
@@ -14,7 +14,7 @@ from scheduler.methods.Pitt import BasePittMethod
 
 @MethodRegistrator.register_class
 class PittDirectMethod(BasePittMethod):
-    def __init__(self, state: ProgramState, logger: Logger, t: T, cache: Common.MethodCache):
+    def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
         super().__init__(state, logger, t, cache)
 
         params =  [
@@ -74,11 +74,11 @@ class PittDirectMethod(BasePittMethod):
         for task_id, possible_machines in self._tasks_possible_machines.items():
             individual.append(random.choice(possible_machines))
 
-        self._ensure_all_machines_present(individual)
+        self.__ensure_all_machines_present(individual)
 
         return individual
 
-    def _ensure_all_machines_present(self, individual: List[int]):
+    def __ensure_all_machines_present(self, individual: List[int]):
         """
         Gwarantuje, że każdy machine_id występuje przynajmniej raz.
         Jeśli brakuje, przenosi losowe zadanie z maszyny posiadającej >1 zadanie.
@@ -100,33 +100,6 @@ class PittDirectMethod(BasePittMethod):
             counts[donor] -= 1
             counts[m_missing] += 1
 
-    def _evaluate_population(self):
-        for individual in self.population:
-            decode = self.build_schedule_map(individual)
-            fitness = self._fitness_function(decode)
-
-            if self.best_individual is None or fitness < self.best_score:
-                self.best_individual = individual.copy()
-                self.best_score = fitness
-
-    def _evaluate_population_initial(self):
-        """
-        Ocena pierwszej populacji i ustawienie pól best_*.
-        """
-        self._evaluate_population()
-
-        self.logger.initial_solution(self.best_score)
-
-    def _evaluate_population_update_best(self, epoch):
-        """
-        Ocena po operatorach. Aktualizuje best_* jeśli znajdzie lepszy osobnik.
-        """
-        last_best = self.best_score
-        self._evaluate_population()
-        has_improved = last_best != self.best_score
-        if has_improved:
-            self.logger.better_solution_found(self.best_score, epoch)
-
     def _crossover_population(self):
         """
         N‑punktowe krzyżowanie par osobników po losowym przetasowaniu.
@@ -138,13 +111,13 @@ class PittDirectMethod(BasePittMethod):
 
         for i in range(0, self._pop_size, 2):
             parents = shuffled[i:i + 2]
-            a, b = self._crossover_pair(parents[0], parents[1])
+            a, b = self.__crossover_pair(parents[0], parents[1])
             new_pop.append(a)
             new_pop.append(b)
 
         self.population = new_pop
 
-    def _crossover_pair(self, p1: List[int], p2: List[int]) -> Tuple[List[int], List[int]]:
+    def __crossover_pair(self, p1: List[int], p2: List[int]) -> Tuple[List[int], List[int]]:
         """
         Krzyżowanie dwóch rodziców:
           - Losuje self.crossover_points unikalnych punktów (w [0, n-2]).
@@ -173,11 +146,11 @@ class PittDirectMethod(BasePittMethod):
                 child1.extend(p2[prev:])
                 child2.extend(p1[prev:])
 
-            if self._is_individual_valid(child1) and self._is_individual_valid(child2):
+            if self.__is_individual_valid(child1) and self.__is_individual_valid(child2):
                 return child1, child2
             # w przeciwnym razie spróbuj ponownie
 
-    def _is_individual_valid(self, individual: List[int]) -> bool:
+    def __is_individual_valid(self, individual: List[int]) -> bool:
         """
         Sprawdza czy osobnik zawiera przynajmniej jedno zadanie dla każdej maszyny.
         """
@@ -190,9 +163,9 @@ class PittDirectMethod(BasePittMethod):
         (jeśli nie pozbawia maszyny wszystkich zadań).
         """
         for ind in self.population:
-            self._mutate_individual(ind)
+            self.__mutate_individual(ind)
 
-    def _mutate_individual(self, individual: List[int]):
+    def __mutate_individual(self, individual: List[int]):
         counts = {m: 0 for m in self.machines.index.values}
         for m in individual:
             counts[m] += 1
@@ -200,12 +173,12 @@ class PittDirectMethod(BasePittMethod):
         for idx, current_m in enumerate(individual):
             # only mutate if the machine has >1 task assigned
             if np.random.uniform(0.0, 1.0) <= self._mutation_probability and counts[current_m] > 1:
-                new_m = self._mutate_gene(current_m)
+                new_m = self.__mutate_gene(current_m)
                 individual[idx] = new_m
                 counts[current_m] -= 1
                 counts[new_m] = counts.get(new_m, 0) + 1
 
-    def _mutate_gene(self, current_machine: int) -> int:
+    def __mutate_gene(self, current_machine: int) -> int:
         n_machines = len(self.machines)
         while True:
             val = random.randint(0, n_machines - 1)
