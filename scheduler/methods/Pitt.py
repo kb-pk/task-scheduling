@@ -12,9 +12,6 @@ from scheduler.methods.BaseMethod import BaseMethod
 class BasePittMethod(BaseMethod, ABC):
     def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
         super().__init__(state, logger, t, cache)
-        self.state = state
-        self.logger = logger
-        self.T = t
 
         self._tasks_possible_machines = []
         self.population = []
