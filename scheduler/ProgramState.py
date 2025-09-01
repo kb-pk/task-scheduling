@@ -16,7 +16,7 @@ class ProgramState:
             if not self.State.__contains__(value):
                 raise ValueError("Invalid enum value")
 
-            self.__current_state = value
+            self.__current_state = self.State(value)
 
     class __OutputState:
         class State(Enum):
@@ -29,6 +29,12 @@ class ProgramState:
 
         def get(self):
             return self.__current_state
+
+        def set(self, value: State):
+            if not self.State.__contains__(value):
+                raise ValueError("Invalid enum value")
+
+            self.__current_state = self.State(value)
 
     class __UserInterfaceState:
         class State(Enum):

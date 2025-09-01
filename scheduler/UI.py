@@ -27,19 +27,20 @@ class CLI(UI):
         print(message)
 
     def start(self):
-        prompt = [
-            self.T.t("Which algorithm would you like to use?"),
-            "1. " + self.T.t("Pitt (direct)"),
-            "2. " + self.T.t("Pitt (permutation-based)"),
-            "3. " + self.T.t("Michigan"),
-            "4. " + self.T.t("Dragonfly"),
-            "5. " + self.T.t("Fruitfly"),
-            "6. " + self.T.t("Switch scheduling mode (current mode: ") + self.state.scheduling.get().name + ")",
-            "7. " + self.T.t("Switch output mode (current mode: ") + self.state.output.get().name + ")",
-            "8. " + self.T.t("Exit program")
-        ]
-
         while True:
+            # reset after every choice
+            prompt = [
+                self.T.t("Which algorithm would you like to use?"),
+                "1. " + self.T.t("Pitt (direct)"),
+                "2. " + self.T.t("Pitt (permutation-based)"),
+                "3. " + self.T.t("Michigan"),
+                "4. " + self.T.t("Dragonfly"),
+                "5. " + self.T.t("Fruitfly"),
+                "6. " + self.T.t("Switch scheduling mode (current mode: ") + self.state.scheduling.get().name + ")",
+                "7. " + self.T.t("Switch output mode (current mode: ") + self.state.output.get().name + ")",
+                "8. " + self.T.t("Exit program")
+            ]
+
             try:
                 for choice in prompt:
                     print(choice)
@@ -69,15 +70,11 @@ class CLI(UI):
             time.sleep(1)
         elif x == 6:
             self.state.scheduling.set(
-                (self.state.scheduling.get() + 1) % len(self.state.scheduling.State)
+                (self.state.scheduling.get().value + 1) % len(self.state.scheduling.State)
             )
-
-            current = self.state.scheduling.get()
-            next = (current + 1) % len(self.state.scheduling.State) + 1
-            self.state.scheduling.set(next)
         elif x == 7:
             self.state.output.set(
-                (self.state.output.get() + 1) % len(self.state.output.State)
+                (self.state.output.get().value + 1) % len(self.state.output.State)
             )
         elif x == 8:
             exit()
