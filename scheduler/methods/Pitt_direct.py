@@ -1,6 +1,6 @@
 from __future__ import annotations
 import random
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 import numpy as np
 
 import scheduler.Common as Common
@@ -8,36 +8,27 @@ from lang.Lang import T
 from scheduler.Logger import Logger
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import MethodRegistrator
-from scheduler.methods.BaseMethod import BaseMethod
-from scheduler.Parameters import ParamDef2, ParamValueTypes, PopulationValidator
+from scheduler.Parameters import ParamDef2, ParamValueTypes
+from scheduler.methods.Pitt import BasePittMethod
+
 
 @MethodRegistrator.register_class
-class PittDirectMethod(BaseMethod):
-    def __init__(self, state: ProgramState, logger: Logger, t: T):
-        super().__init__(state, logger, t)
+class PittDirectMethod(BasePittMethod):
+    def __init__(self, state: ProgramState, logger: Logger, t: T, cache: Common.MethodCache):
+        super().__init__(state, logger, t, cache)
 
-        self._tasks_possible_machines: Dict[int, List[int]] = self._map_possible_machines_to_tasks()
-        self.population: List[List[int]] = []
-        self.best_individual: List[int] | None = None
-        self.best_score: float | None = None
-
-        self.PARAM_DEFS = [
-            ParamDef2(self.T.t("Iterations"), ParamValueTypes.INT, 100, self.T.t("Number of iterations (epochs)"),
-                      min_value=1),
-            ParamDef2(self.T.t("Population size"), ParamValueTypes.INT, 10, self.T.t("Population size (must be even)"),
-                      min_value=2,
-                      validator=PopulationValidator()),
+        params =  [
             ParamDef2(self.T.t("Crossover points"), ParamValueTypes.INT, 1, self.T.t("Number of crossover points"),
                       min_value=1, max_value=len(self.tasks)),
             ParamDef2(self.T.t("Mutation probability"), ParamValueTypes.FLOAT, 0.01, self.T.t("Gene mutation probability"),
                       min_value=0.0, max_value=1.0),
         ]
 
+        self.PARAM_DEFS += params
+
         # defaults (for easier access - therefore hacky)
-        self._iterations = self.PARAM_DEFS[0].get_value()
-        self._pop_size = self.PARAM_DEFS[1].get_value()
-        self._crossover_points = self.PARAM_DEFS[2].get_value()
-        self._mutation_probability = self.PARAM_DEFS[3].get_value()
+        self._crossover_points = self.PARAM_DEFS[0].get_value()
+        self._mutation_probability = self.PARAM_DEFS[1].get_value()
 
         self.name = self.T.t("Pitt (direct)")
         self.description = self.T.td({
@@ -69,39 +60,13 @@ class PittDirectMethod(BaseMethod):
             """
         })
 
-    def initialize(self):
-        self.population = [self._generate_individual() for _ in range(self._pop_size)]
-        self._evaluate_population_initial()
-
-    def optimize(self):
-        for epoch in range(self._iterations):
-            self._crossover_population()
-            self._mutate_population()
-            self._evaluate_population_update_best(epoch)
-
-    def get_best_solution(self):
-        """
-        Zwraca najlepszy znaleziony osobnik (lista machine_id per task).
-        """
-        return self.best_individual
 
     def build_schedule_map(self, solution: List[int]):
         schedule_map = {m_id: [] for m_id in self.machines.index.values}
         for task_id, machine_id in enumerate(solution):
             schedule_map[machine_id].append(task_id)
+
         return schedule_map
-
-    def _map_possible_machines_to_tasks(self) -> Dict[int, List[int]]:
-        """
-        Mapuje zadania i maszyny, które dane zadanie mogą wykonać (na podstawie features).
-        :return: Słownik {task_id: [machine_id, machine_id, ...], ...}
-        """
-        possible_machines_for_tasks = {task_id: [
-            machine_id for machine_id in self.machines.index.values
-            if Common.can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id], self.features)
-        ] for task_id in self.tasks.index.values}
-
-        return possible_machines_for_tasks
 
     def _generate_individual(self) -> List[int]:
         individual = []
@@ -171,11 +136,8 @@ class PittDirectMethod(BaseMethod):
         random.shuffle(shuffled)
         new_pop: List[List[int]] = []
 
-        for i in range(0, len(shuffled), 2):
+        for i in range(0, self._pop_size, 2):
             parents = shuffled[i:i + 2]
-            if len(parents) < 2:
-                new_pop.append(parents[0][:])
-                break
             a, b = self._crossover_pair(parents[0], parents[1])
             new_pop.append(a)
             new_pop.append(b)

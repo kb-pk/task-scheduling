@@ -1,6 +1,7 @@
 from sys import argv
 
 import scheduler.Common as Common
+from scheduler.MethodCache import MethodCache
 from scheduler.Logger import Logger
 from scheduler.Registry import MethodRegistry
 from scheduler.ProgramState import ProgramState
@@ -28,8 +29,10 @@ class Main:
 
         # intialize registered methods with current state
         self.__methods = {}
+        # init with same cache
+        cache = MethodCache()
         for name, method in MethodRegistry.get_registry().items():
-            self.__methods[name] = method(self.__state, self.__logger, self.T)
+            self.__methods[name] = method(self.__state, self.__logger, self.T, cache)
 
     def _set_interface(self):
         # tmp logger since we don't have an "UI" yet, yeah hacky

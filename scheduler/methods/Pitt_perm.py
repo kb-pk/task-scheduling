@@ -1,103 +1,77 @@
 from __future__ import annotations
 import math
 import random
-from typing import List, Tuple, Dict
+from typing import List, Dict
 
 import numpy as np
 from sklearn.utils import shuffle
 
-import scheduler.Common as Common
-from scheduler.methods.BaseMethod import BaseMethod
-from scheduler.Parameters import ParamDef
+from lang.Lang import T
+from scheduler.MethodCache import MethodCache
+from scheduler.Logger import Logger
+from scheduler.ProgramState import ProgramState
+from scheduler.Registry import MethodRegistrator
+from scheduler.Parameters import ParamDef2, ParamValueTypes, PittPermCrossoverValidator, InfluenceGroupInstantiator
+from scheduler.methods.Pitt import BasePittMethod
 
-class PittPermMethod(BaseMethod):
-    PARAM_DEFS = [
-        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
-        ParamDef("population_size", "int", 10, "Population size (even recommended)", min_value=2),
-        ParamDef("pm_swap", "float", 0.01, "Swap mutation probability", min_value=0.0, max_value=1.0),
-        ParamDef("pm_transposition", "float", 0.01, "Transposition mutation probability", min_value=0.0, max_value=1.0),
-        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
-    ]
+@MethodRegistrator.register_class
+class PittPermMethod(BasePittMethod):
+    def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
+        super().__init__(state, logger, t, cache)
 
-    def __init__(self,
-                 iterations: int = 100,
-                 population_size: int = 10,
-                 pm_swap: float = 0.01,
-                 pm_transposition: float = 0.01,
-                 show_chart: bool = True):
-        super().__init__(iterations=iterations, show_chart=show_chart)
-        self.population_size = population_size
-        self.pm_swap = pm_swap
-        self.pm_transposition = pm_transposition
+        params = [
+            * InfluenceGroupInstantiator.set([
+                ParamDef2(self.T.t("PMX"), ParamValueTypes.BOOLEAN, True,
+                          self.T.t("Partial mapped crossover")),
+                ParamDef2(self.T.t("CX"), ParamValueTypes.BOOLEAN, False,
+                        self.T.t("Cycle crossover")),
+                ParamDef2(self.T.t("OX"), ParamValueTypes.BOOLEAN, False,
+                          self.T.t("Ordered crossover")),
+            ], PittPermCrossoverValidator),
+            ParamDef2(self.T.t("Mutation probability (pms)"), ParamValueTypes.FLOAT, 0.01,
+                      self.T.t("Gene swap mutation probability"),
+                      min_value=0.0, max_value=1.0),
+            ParamDef2(self.T.t("Mutation probability (pmt)"), ParamValueTypes.FLOAT, 0.01,
+                      self.T.t("Gene transposition mutation probability"),
+                      min_value=0.0, max_value=1.0),
+        ]
 
-        # Mapa możliwych maszyn dla każdego zadania {task_id: [machine_id,...]}
-        self.tasks_to_machines: Dict[int, List[int]] = {}
-        # Populacja: lista osobników (tasks_sequence, machines_chromosome)
-        self.population: List[Tuple[List[int], List[int]]] = []
-        # Najlepszy osobnik + jego metryki
-        self.best_individual: Tuple[List[int], List[int]] | None = None
-        self.best_score: float | None = None
-        self.other_score: float | None = None
+        self.PARAM_DEFS += params
 
-    def set_parameters(self, iterations=100, population_size=10, pm_swap=0.01, pm_transposition=0.01, show_chart=True):
-        self.iterations = iterations
-        self.population_size = population_size
-        self.pm_swap = pm_swap
-        self.pm_transposition = pm_transposition
-        self.show_chart = show_chart
+        self.pmx = params[0].get_value()
+        self.cx = params[1].get_value()
+        self.ox = params[2].get_value()
+        self.pms = params[3].get_value()
+        self.pmt = params[4].get_value()
 
-    # ------------------------------------------------------------
-    # Identyfikacja i opis
-    # ------------------------------------------------------------
-    def get_name(self) -> str:
-        """
-        Nazwa metody używana w plikach wynikowych.
-        """
-        return "pitt_perm"
+        self.name = self.T.t("Pitt (permutation-based)")
+        self.description = self.T.td({
+            self.state.lang.State.pl_PL: """
+            Algorytm oparty o podejście Pitt, reprezentacja permutowana.
+            Osobnik - reprezentacja konkretnego harmonogramu zadań dla wszystkich maszyn. Składa się z 2 chromosomów.
+            Chromosom 1 - lista zadań w konkretnej kolejności. Składa się z N (liczba zadań) genów.
+            Chromosom 2 - liczba zadań z chromosomu 1 przypisanych do maszyn. Składa się z M (liczba maszyn) genów.
+            Gen (chromosom 1) - pojedyncze zadanie z listy zadań.
+            Gen (chromosom 2) - liczba zadań przypisanych do konkretnej maszyny. Indeks genu w chromosomie definiuje maszynę (machine_id).
+            Selekcja - brak selekcji pomiędzy epokami.
+            Krzyżowanie - PMX (partial mapped crossover), CX (cycle crossover), OX (ordered crossover). Każdy osobnik bierze udział.
+            Mutacja - S (swap mutation - zamiana zadań pomiędzy maszynami) i T (transposition mutation - przeniesienie zadania jednej maszyny do harmonogramu drugiej).
+            """,
 
-    # ------------------------------------------------------------
-    # Cykl życia (BaseMethod hooki)
-    # ------------------------------------------------------------
-    def initialize(self):
-        """
-        Inicjalizacja:
-          - Budowa mapy tasks_to_machines (zadanie -> możliwe maszyny).
-          - Generacja populacji początkowej (self.population_size osobników).
-          - Ocena i wybór najlepszego osobnika startowego.
-        """
-        self.tasks_to_machines = self._map_tasks_to_possible_machines()
-        self.population = [self._generate_individual() for _ in range(self.population_size)]
-        self._evaluate_population_initial()
-
-    def optimize(self):
-        """
-        Główna pętla optymalizacji:
-          - Crossover całej populacji (Ordered Crossover na kolejnych parach po przetasowaniu).
-          - Mutacja (swap + transposition) dla każdego osobnika.
-          - Ocena, aktualizacja najlepszego osobnika.
-        """
-        for epoch in range(self.iterations):
-            self.population = self._crossover_population(self.population)
-            self.population = self._mutate_population(self.population)
-            improved = self._evaluate_population_update_best()
-            if improved:
-                # Krótki log z aktualnym najlepszym wynikiem
-                if Common.scheduling_mode == Common.MAKESPAN_MODE:
-                    print(f"[{epoch}] New best makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
-                else:
-                    print(f"[{epoch}] New best energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
-
-    def get_best_solution(self):
-        """
-        Zwraca najlepszego osobnika (krotka).
-        """
-        return self.best_individual
+            self.state.lang.State.en_GB: """
+            Algorithm based on the Pitt approach, permutated representation.
+            Entity - a representation of a particular schedule of tasks for all machines. Made up of 2 chromosomes.
+            Chromosome 1 - array of tasks in a specific order. Made up of N (task number) genes.
+            Chromosome 2 - number of tasks (taken from chromosome 1) assigned to machines. Made up of M (machine number) genes.
+            Gene (chromosome 1) - a single task from the task array.
+            Gene (chromosome 2) - number of tasks assigned to a specific machine. The index of the gene in a chromosome defined the machine (machine_id).
+            Selection - no selection between epochs.
+            Crossover - PMX (partial mapped crossover), CX (cycle crossover), OX (ordered crossover). Every entity takes part.
+            Mutation - S (swap mutation - swaps tasks between machines) i T (transposition mutation - moves a task from one machine's schedule to another's).
+            """
+        })
 
     def build_schedule_map(self, solution):
-        """
-        Konwersja najlepszego osobnika na mapę {machine_id: [task_ids]}.
-        :param solution: najlepszy osobnik (tasks_sequence, machines_chromosome)
-        """
         tasks_sequence, machines_chromosome = solution
         schedule_map = {m: [] for m in range(len(machines_chromosome))}
         offset = 0
@@ -107,60 +81,20 @@ class PittPermMethod(BaseMethod):
             offset += count
         return schedule_map
 
-    def after_run(self, schedule_map, makespan, total_energy):
-        """
-        Zapis krótkiego logu do pliku tekstowego (CSV zapisuje baza).
-        """
-        if Common.scheduling_mode == Common.MAKESPAN_MODE:
-            primary = makespan
-            secondary = total_energy
-        else:
-            primary = total_energy
-            secondary = makespan
-        with open("results/result_pitt_perm", "a") as f:
-            f.write(f"{primary},{secondary}\n")
-
-    # ------------------------------------------------------------
-    # Generowanie i ocena populacji
-    # ------------------------------------------------------------
-    def _map_tasks_to_possible_machines(self) -> Dict[int, List[int]]:
-        """
-        Dla każdego zadania wyznacza listę maszyn spełniających jego wymagania (cechy bezpieczeństwa).
-        Zwraca: {task_id: [machine_id, ...]}
-        """
-        mapping = {}
-        for task_id in self.tasks.index.values:
-            allowed = []
-            task_row = self.tasks.iloc[task_id]
-            for machine_id in self.machines.index.values:
-                if Common.can_execute_task_on_machine(self.machines.iloc[machine_id], task_row, self.features):
-                    allowed.append(machine_id)
-            mapping[task_id] = allowed
-        return mapping
-
     def _generate_machines_chromosome(self) -> List[int]:
-        """
-        Konstruuje machines_chromosome rozdzielając zadania możliwie równo na maszyny.
-        """
         n_tasks = len(self.tasks)
         n_machines = len(self.machines)
-        base = math.floor(n_tasks / n_machines)
-        chrom = [base] * n_machines
-        remainder = n_tasks - base * n_machines
+        tasks_per_machine = math.floor(n_tasks / n_machines)
+        chrom = [tasks_per_machine] * n_machines
+        remainder = n_tasks - tasks_per_machine * n_machines
         for i in range(remainder):
             chrom[i] += 1
         return chrom
 
     def _assign_tasks_to_machines(self, machines_chromosome: List[int]) -> Dict[int, List[int]]:
-        """
-        Przypisuje zadania do maszyn, uwzględniając listę dopuszczalnych maszyn.
-          - Zadania sortowane rosnąco po liczbie możliwych maszyn (heurystyka ograniczeń).
-          - Wybór losowy spośród dostępnych maszyn, z kontrolą limitu (machines_chromosome[m_id]).
-        Zwraca: {machine_id: [task_ids]}
-        """
         machines_to_tasks = {m_id: [] for m_id in self.machines.index.values}
         # Zadania, które mają najmniej opcji – najpierw
-        sorted_tasks = sorted(self.tasks_to_machines.items(), key=lambda kv: len(kv[1]))
+        sorted_tasks = sorted(self._tasks_possible_machines.items(), key=lambda kv: len(kv[1]))
         for task_id, possible in sorted_tasks:
             if len(possible) == 1:
                 machines_to_tasks[possible[0]].append(task_id)
@@ -172,258 +106,186 @@ class PittPermMethod(BaseMethod):
                     break
         return machines_to_tasks
 
-    def _generate_individual(self) -> Tuple[List[int], List[int]]:
-        """
-        Tworzy pojedynczego osobnika:
-          1. Generuje machines_chromosome (liczba zadań na maszynę).
-          2. Przydziela zadania do maszyn z zachowaniem ograniczeń.
-          3. Łączy listy zadań w jedną sekwencję (tasks_sequence) w kolejności maszyn.
-        Zwraca (tasks_sequence, machines_chromosome).
-        """
+    def _generate_individual(self):
         machines_chromosome = self._generate_machines_chromosome()
-        mapping = self._assign_tasks_to_machines(machines_chromosome)
-        tasks_sequence: List[int] = []
-        for m_id in mapping.keys():
-            tasks_sequence.extend(mapping[m_id])
-        return tasks_sequence, machines_chromosome
+        machines_to_tasks = self._assign_tasks_to_machines(machines_chromosome)
+        ret_tasks = []
+        for tasks_list in machines_to_tasks.values():
+            ret_tasks += tasks_list
 
-    def _evaluate_individual(self, individual: Tuple[List[int], List[int]]) -> Tuple[float, float]:
-        """
-        Oblicza (primary_metric, secondary_metric) dla osobnika:
-          - makespan: maksymalna suma czasów zadań na maszynie
-          - energy: suma busy + idle (wg parametrów maszyn)
-        Zwraca (main_score, other_score) zgodnie z scheduling_mode.
-        """
-        tasks_seq, machines_chrom = individual
-        offset = 0
-        machine_times = [0.0] * len(machines_chrom)
-        for m_id, count in enumerate(machines_chrom):
-            for t in range(count):
-                task_id = tasks_seq[offset + t]
-                machine_times[m_id] += self.etc[task_id][m_id]
-            offset += count
-        makespan = max(machine_times)
-        # Energia
-        total_energy = 0.0
-        for m_id, busy in enumerate(machine_times):
-            p_busy = self.machines.values[m_id][2]
-            p_idle = self.machines.values[m_id][3]
-            total_energy += busy * p_busy + (makespan - busy) * p_idle
-        if Common.scheduling_mode == Common.ENERGY_MODE:
-            return total_energy, makespan
-        return makespan, total_energy
+        return [ret_tasks, machines_chromosome]
 
-    def _evaluate_population_initial(self):
-        """
-        Ocena populacji początkowej – ustawia best_individual / best_score / other_score.
-        """
-        for ind in self.population:
-            main_val, other_val = self._evaluate_individual(ind)
-            if self.best_individual is None or main_val < self.best_score:
-                self.best_individual = self._clone_individual(ind)
-                self.best_score = main_val
-                self.other_score = other_val
-        if Common.scheduling_mode == Common.MAKESPAN_MODE:
-            print(f"Initial makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
-        else:
-            print(f"Initial energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
+    def _crossover_population(self):
+        match True:
+            case self.pmx:
+                crossover = self._partial_mapped_crossover
+            case self.cx:
+                crossover = self._cycle_crossover
+            case self.ox:
+                crossover = self._ordered_crossover
+            case _:
+                raise NotImplementedError
 
-    def _evaluate_population_update_best(self) -> bool:
-        """
-        Ocena populacji po operatorach. Aktualizuje best jeśli znajdzie lepszego.
-        Zwraca True jeżeli nastąpiła poprawa.
-        """
-        improved = False
-        for ind in self.population:
-            main_val, other_val = self._evaluate_individual(ind)
-            if main_val < self.best_score:
-                self.best_individual = self._clone_individual(ind)
-                self.best_score = main_val
-                self.other_score = other_val
-                improved = True
-        return improved
+        shuffled = shuffle(self.population)
+        new_pop = []
 
-    # ------------------------------------------------------------
-    # Operatory genetyczne
-    # ------------------------------------------------------------
-    def _crossover_population(self, population: List[Tuple[List[int], List[int]]]
-                              ) -> List[Tuple[List[int], List[int]]]:
-        """
-        Ordered crossover (OX) na chromosomie tasks_sequence w parach
-        (po przetasowaniu populacji). machines_chromosome dziedziczone
-        bez zmian od odpowiedniego rodzica (jak w implementacji pierwotnej).
-        """
-        shuffled = shuffle(population)
-        new_pop: List[Tuple[List[int], List[int]]] = []
-        # jeśli nieparzysta populacja – ostatni osobnik przechodzi bez zmian
-        limit = len(shuffled) - (len(shuffled) % 2)
-        for i in range(0, limit, 2):
-            dad_tasks, dad_mach = shuffled[i]
-            mom_tasks, mom_mach = shuffled[i + 1]
-            child_a_tasks, child_b_tasks = self._ordered_crossover(dad_tasks, mom_tasks)
-            # dziedziczenie machines_chromosome – zachowujemy oryginalne (jak było)
-            new_pop.append((child_a_tasks, dad_mach.copy()))
-            new_pop.append((child_b_tasks, mom_mach.copy()))
-        if len(shuffled) % 2 == 1:
-            new_pop.append(self._clone_individual(shuffled[-1]))
-        return new_pop
+        for i in range(0, self._pop_size - 1):
+            chr_1_dad, chr_1_mom = shuffled[i][0], shuffled[i + 1][0]
+            chr_1_new_1, chr_1_new_2 = crossover(chr_1_dad, chr_1_mom)
 
-    def _ordered_crossover(self, dad: List[int], mom: List[int]) -> Tuple[List[int], List[int]]:
-        """
-        Ordered Crossover (OX):
-          1. Losowy fragment (start:end) z matki trafia do córki, z ojca do syna.
-          2. Pozostałe pozycje wypełniane w kolejności danych z drugiego rodzica.
-        Zapewnia zachowanie permutacji (brak duplikatów).
-        """
+            new_pop.append([chr_1_new_1, shuffled[i][1]])
+            new_pop.append([chr_1_new_2, shuffled[i + 1][1]])
+
+        self.population = new_pop
+
+    def _partial_mapped_crossover(self, mom, dad):
         size = len(mom)
-        start, end = sorted(random.sample(range(size), 2))
-        daughter = [-1] * size
-        son = [-1] * size
-        # Dziedziczenie segmentu
-        daughter[start:end + 1] = mom[start:end + 1]
-        son[start:end + 1] = dad[start:end + 1]
-        # Elementy już użyte
-        d_used = set(daughter[start:end + 1])
-        s_used = set(son[start:end + 1])
-        # Wypełnianie pozostałych pozycji
-        d_idx = 0
-        s_idx = 0
-        for i in range(size):
-            if daughter[i] == -1:
-                while dad[d_idx] in d_used:
-                    d_idx += 1
-                daughter[i] = dad[d_idx]
-                d_used.add(dad[d_idx])
-                d_idx += 1
-            if son[i] == -1:
-                while mom[s_idx] in s_used:
-                    s_idx += 1
-                son[i] = mom[s_idx]
-                s_used.add(mom[s_idx])
-                s_idx += 1
+        start, end = sorted([random.randrange(size) for _ in range(2)])
+
+        daughter = [None] * size
+        son = [None] * size
+
+        daughter[start:end] = dad[start:end]
+        son[start:end] = mom[start:end]
+
+        map1 = {dad[i]: mom[i] for i in range(start, end)}
+        map2 = {mom[i]: dad[i] for i in range(start, end)}
+
+        def finish_map(parent, child, mapping):
+            for i in range(size):
+                if child[i] is None:
+                    gene = parent[i]
+                    while gene in mapping:
+                        gene = mapping[gene]
+                    child[i] = gene
+
+        finish_map(mom, daughter, map1)
+        finish_map(dad, son, map2)
+
         return daughter, son
 
-    def _mutate_population(self, population: List[Tuple[List[int], List[int]]]
-                           ) -> List[Tuple[List[int], List[int]]]:
-        """
-        Dla każdego osobnika iterujemy po genie tasks_sequence i:
-          - z prawdopodobieństwem pm_swap wykonujemy swap mutation.
-          - z prawdopodobieństwem pm_transposition wykonujemy transposition mutation.
-        Zwraca zmutowaną populację (operacje in-place na kopiach).
-        """
-        mutated = []
-        for ind in population:
-            ind_copy = self._clone_individual(ind)
-            tasks_seq, machines_chrom = ind_copy
-            for pos in range(len(tasks_seq)):
+    def _cycle_crossover(self, mom, dad):
+        def __create_child(primary_parent, other_parent):
+            cycle = []
+
+            inx = 0
+            cycle.append(inx)
+
+            while True:
+                tmp = other_parent[inx]
+                inx = primary_parent.index(tmp)
+                cycle.append(inx)
+
+                if inx == 0:
+                    break
+
+            child = [i for i in range(len(primary_parent))]
+
+            for i, _ in enumerate(child):
+                if i in cycle:
+                    child[i] = primary_parent[i]
+                else:
+                    child[i] = other_parent[i]
+
+            return child
+
+        daughter = __create_child(dad, mom)
+        son = __create_child(mom, dad)
+
+        return daughter, son
+
+    def _ordered_crossover(self, mom, dad):
+        # długość osobnika (ilość zadań)
+        size = len(mom)
+
+        # wybierz losową pozycje początku / końca krzyżowania
+        daughter, son = [-1] * size, [-1] * size
+        start, end = sorted([random.randrange(size) for _ in range(2)])
+
+        # replikuj sekwencję matki dla córki i ojca dla syna
+        daughter_inherited = []
+        son_inherited = []
+        for i in range(start, end + 1):
+            daughter[i] = mom[i]
+            son[i] = dad[i]
+            daughter_inherited.append(mom[i])
+            son_inherited.append(dad[i])
+
+        # wypełnij pozostałe pozycje pozostałymi danymi z rodziców
+        current_dad_position, current_mom_position = 0, 0
+
+        fixed_pos = list(range(start, end + 1))
+        i = 0
+        while i < size:
+            # pomiń już skrzyzowany fragment
+            if i in fixed_pos:
+                i += 1
+                continue
+
+            # wypełniaj pozostałe fragmenty
+            if daughter[i] == -1:  # wymaga wypelnienia
+                dad_trait = dad[current_dad_position]
+                while dad_trait in daughter_inherited:
+                    current_dad_position += 1
+                    dad_trait = dad[current_dad_position]
+                daughter[i] = dad_trait
+                daughter_inherited.append(dad_trait)
+
+            if son[i] == -1:  # wymaga wypelnienia
+                mom_trait = mom[current_mom_position]
+                while mom_trait in son_inherited:
+                    current_mom_position += 1
+                    mom_trait = mom[current_mom_position]
+                son[i] = mom_trait
+                son_inherited.append(mom_trait)
+            i += 1
+
+        return daughter, son
+
+    def _mutate_population(self):
+        for individual in self.population:
+            for index, _ in enumerate(individual[0]):
                 if self._check_swap_mutation():
-                    self._swap_mutation(tasks_seq, machines_chrom, pos)
+                    self._swap_mutation(individual, index)
                 if self._check_transposition_mutation():
-                    self._transposition_mutation(tasks_seq, machines_chrom, pos)
-            mutated.append(ind_copy)
-        return mutated
+                    self._transposition_mutation(individual, index)
 
     def _check_swap_mutation(self) -> bool:
         """
         Czy wykonać mutację swap (porównanie z pm_swap).
         """
-        return np.random.uniform(0.0, 1.0) <= self.pm_swap
+        return np.random.uniform(0.0, 1.0) <= self.pms
 
     def _check_transposition_mutation(self) -> bool:
         """
         Czy wykonać mutację transposition (porównanie z pm_transposition).
         """
-        return np.random.uniform(0.0, 1.0) <= self.pm_transposition
+        return np.random.uniform(0.0, 1.0) <= self.pmt
 
-    def _swap_mutation(self, tasks_seq: List[int], machines_chrom: List[int], i: int):
-        """
-        Swap mutation:
-          - Losuje drugą pozycję j != i.
-          - Sprawdza czy po zamianie zadania nadal mogą wykonać się na maszynach,
-            do których należą (wg bieżącego podziału machines_chrom).
-        """
-        if len(tasks_seq) < 2:
-            return
-        size = len(tasks_seq) - 1
-        j = np.random.randint(0, size + 1)
-        while j == i:
-            j = np.random.randint(0, size + 1)
-        # Określ do jakich maszyn należą pozycje i, j
-        machine_i = self._machine_for_task_position(machines_chrom, i)
-        machine_j = self._machine_for_task_position(machines_chrom, j)
-        task_i = tasks_seq[i]
-        task_j = tasks_seq[j]
-        # Sprawdź wykonalność po zamianie
-        if (machine_j in self.tasks_to_machines[task_i]) and (machine_i in self.tasks_to_machines[task_j]):
-            tasks_seq[i], tasks_seq[j] = tasks_seq[j], tasks_seq[i]
+    def _swap_mutation(self, individual, gene_index):
+        tasks_num = len(individual[0])
+        j = np.random.randint(0, tasks_num)
+        machine_id = self._get_machine_number_for_task(individual, j)
 
-    def _transposition_mutation(self, tasks_seq: List[int], machines_chrom: List[int], i: int):
-        """
-        Transposition mutation:
-          - Losuje drugą pozycję j != i.
-          - Przesuwa zadanie z pozycji i w nowe miejsce j (rotacja segmentu),
-            a machines_chrom aktualizuje liczbę zadań maszyn (zmniejsza dla źródłowej,
-            zwiększa dla docelowej), jeśli przenoszone zadanie jest dozwolone na maszynie docelowej.
-        """
-        if len(tasks_seq) < 2:
-            return
-        size = len(tasks_seq) - 1
-        j = np.random.randint(0, size + 1)
-        while j == i:
-            j = np.random.randint(0, size + 1)
+        while gene_index == j or not self._can_run_task_on_machine(individual[0][gene_index], machine_id):
+            j = np.random.randint(0, tasks_num)
+            machine_id = self._get_machine_number_for_task(individual, j)
 
-        source_machine = self._machine_for_task_position(machines_chrom, i)
-        dest_machine = self._machine_for_task_position(machines_chrom, j)
-        if source_machine == dest_machine:
-            return  # bez zmiany przypisania
+        individual[0][gene_index], individual[0][j] = individual[0][j], individual[0][gene_index]
 
-        task_id = tasks_seq[i]
-        if dest_machine not in self.tasks_to_machines[task_id]:
-            return  # niedozwolone
+    def _transposition_mutation(self, individual, gene_index):
+        pass
 
-        if machines_chrom[source_machine] <= 1:
-            return  # nie można pozbawić maszyny jedynego zadania
+    def _can_run_task_on_machine(self, task_id, machine_id):
+        return machine_id in self._tasks_possible_machines[task_id]
 
-        # Aktualizacja machines_chrom
-        machines_chrom[source_machine] -= 1
-        machines_chrom[dest_machine] += 1
-
-        # Fizyczne przesunięcie zadania w sekwencji
-        transposed = tasks_seq[i]
-        if i < j:
-            for pos in range(i, j):
-                tasks_seq[pos] = tasks_seq[pos + 1]
-            tasks_seq[j] = transposed
-        else:
-            for pos in range(i, j, -1):
-                tasks_seq[pos] = tasks_seq[pos - 1]
-            tasks_seq[j] = transposed
-
-    # ------------------------------------------------------------
-    # Funkcje pomocnicze
-    # ------------------------------------------------------------
-    @staticmethod
-    def _clone_individual(ind: Tuple[List[int], List[int]]) -> Tuple[List[int], List[int]]:
-        """
-        Głęboka kopia osobnika (listy).
-        """
-        return ind[0][:], ind[1][:]
-
-    @staticmethod
-    def _machine_for_task_position(machines_chrom: List[int], pos: int) -> int:
-        """
-        Dla pozycji pos w tasks_sequence zwraca ID maszyny,
-        na którą ta pozycja przypada według machines_chromosome.
-        """
-        cumulative = 0
-        for m_id, count in enumerate(machines_chrom):
-            cumulative += count
-            if cumulative > pos:
-                return m_id
-        return len(machines_chrom) - 1  # fallback (nie powinno się zdarzyć)
-
-
-# Pozostawiony punkt wejścia tylko do testów indywidualnych tej klasy.
-if __name__ == "__main__":
-    alg = PittPermMethod(iterations=100, population_size=10, pm_swap=0.01, pm_transposition=0.01, show_chart=True)
-    alg.run()
+    def _get_machine_number_for_task(self, individual, task_position):
+        counter = 0
+        position_number = 0
+        for machine in individual[1]:
+            position_number += machine
+            if position_number >= task_position + 1:
+                return counter
+            else:
+                counter = counter + 1
+        return None

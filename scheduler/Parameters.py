@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Callable
+from typing import Any, Dict, Callable, List, Type
 
 from enum import Enum
 
@@ -76,6 +76,28 @@ class ParamDef2:
 
         self._value = casted
 
+class InfluenceGroupInstantiator:
+    """
+    For params that should influence each other (like ones where only one can be switched on at a time).
+    It's just a wrapper at instantiation - it returns the ParamDef's that are passed into it, but properly instantiated
+
+    This is to prevent the client from messing with _* (quote-unquote "private") variables
+    """
+    @staticmethod
+    def set(param_defs: List[ParamDef2], validator: Type[InfluenceGroupValidator]):
+        for inx, param in enumerate(param_defs):
+            influence_group = param_defs.copy()
+            # remove the param itself from its influence group
+            influence_group.pop(inx)
+
+            v = validator(influence_group)
+            param._validator = v
+
+            # to prevent accidentally setting bad defaults
+            v.validate(param.get_value())
+
+        return param_defs
+
 
 class Validator(ABC):
     def __init__(self):
@@ -90,6 +112,26 @@ class PopulationValidator(Validator):
     def validate(self, value):
         if value % 2 != 0:
             raise ValueError(self.message + "population number must be even")
+
+
+class InfluenceGroupValidator(Validator, ABC):
+    def __init__(self, influence_group: List[ParamDef2]):
+        super().__init__()
+        self.influence_group = influence_group
+
+
+class PittPermCrossoverValidator(InfluenceGroupValidator):
+    def validate(self, value):
+        if not self.influence_group:
+            raise ValueError(self.message + "influence group is empty")
+
+        # conflicts only arise when two or more methods are active
+        if not value:
+            return
+
+        for param in self.influence_group:
+            if param.get_value() == value:
+                raise ValueError("Can't set more than one crossover method")
 
 
 @dataclass
