@@ -9,7 +9,7 @@ from scheduler.Parameters import ParamDef2, ParamValueTypes, PopulationValidator
 from scheduler.ProgramState import ProgramState
 from scheduler.methods.BaseMethod import BaseMethod
 
-class BasePittMethod(BaseMethod, ABC):
+class BasePittMethod(BaseMethod):
     def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
         super().__init__(state, logger, t, cache)
 
