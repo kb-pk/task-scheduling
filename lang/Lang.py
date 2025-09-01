@@ -18,18 +18,6 @@ class T:
         """
         return self.__t_file.get(string, string)
 
-    def tl(self, strings: list[str]):
-        """
-        Same as t(), but wraps around a list of strings
-
-        :return: A list of translated strings
-        """
-        translations = []
-        for s in strings:
-            translations.append(self.t(s))
-
-        return translations
-
     def td(self, translations: dict):
         """
         Wraps around a dictionary the like of {LangState.State.*: "literal in that language", ...}

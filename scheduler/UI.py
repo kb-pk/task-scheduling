@@ -27,17 +27,17 @@ class CLI(UI):
         print(message)
 
     def start(self):
-        prompt = self.T.tl([
-            "Which algorithm would you like to use?",
-            "1. ", "Pitt (direct)",
-            "2. ", "Pitt (permutation-based)",
-            "3. ", "Michigan",
-            "4. ", "Dragonfly",
-            "5. ", "Fruitfly",
-            "6. ", "Switch scheduling mode (current mode: ", self.state.scheduling.get(), ")",
-            "7. ", "Switch output mode (current mode: ", self.state.output.get(), ")",
-            "8. ", "Exit program"
-        ])
+        prompt = [
+            self.T.t("Which algorithm would you like to use?"),
+            "1. " + self.T.t("Pitt (direct)"),
+            "2. " + self.T.t("Pitt (permutation-based)"),
+            "3. " + self.T.t("Michigan"),
+            "4. " + self.T.t("Dragonfly"),
+            "5. " + self.T.t("Fruitfly"),
+            "6. " + self.T.t("Switch scheduling mode (current mode: ") + self.state.scheduling.get().name + ")",
+            "7. " + self.T.t("Switch output mode (current mode: ") + self.state.output.get().name + ")",
+            "8. " + self.T.t("Exit program")
+        ]
 
         while True:
             try:
