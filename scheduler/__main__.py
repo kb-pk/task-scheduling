@@ -51,8 +51,6 @@ class Main:
         return ui(self.__state, self.T, self.run_algorithm)
 
     def main(self):
-        Common.prepare_results_directory()
-
         self.__ui.start()
 
     def run_algorithm(self, selected_method_name: str):
