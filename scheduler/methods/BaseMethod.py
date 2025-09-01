@@ -22,7 +22,6 @@ class BaseMethod(ABC):
 
         # Cached last run artifacts (for GUI one‑click access)
         self.last_schedule_map = None
-        self.last_metrics = {}
         self.last_solution = None
 
         self.best_individual = None
@@ -67,6 +66,7 @@ class BaseMethod(ABC):
         raise NotImplementedError
 
     def run(self):
+        self._reset()
         self.initialize()
         self.optimize()
         solution = self.get_best_solution()
@@ -75,7 +75,10 @@ class BaseMethod(ABC):
         # cache results
         self.last_solution = solution
         self.last_schedule_map = schedule_map
-        self.last_metrics = metrics
+
+    def _reset(self):
+        self.best_individual = None
+        self.best_score = None
 
     def _get_loads(self, schedule_map):
         loads = [0.0 for _ in range(len(self.machines))]
