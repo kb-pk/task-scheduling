@@ -1,4 +1,6 @@
-import numpy as np 
+from enum import Enum
+
+import numpy as np
 import pandas as pd
 import os
 
@@ -28,7 +30,6 @@ def prepare_results_directory():
                 os.remove(file_path)
         except Exception as e:
             print(f'Failed to delete {file_path}. Reason: {e}')
-
 
 
 def read_machines(features):

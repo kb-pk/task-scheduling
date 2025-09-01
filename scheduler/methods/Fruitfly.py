@@ -1,9 +1,8 @@
 import numpy as np
 import scheduler.Common as Common
-from .BaseMethod import BaseMethod, Lang
-from scheduler.Parametrs import ParamDef, register_method
+from scheduler.methods.BaseMethod import BaseMethod
+from scheduler.Parameters import ParamDef
 
-@register_method
 class FruitflyMethod(BaseMethod):
     PARAM_DEFS = [
         ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
@@ -31,7 +30,7 @@ class FruitflyMethod(BaseMethod):
         self.vision_step = vision_step
         self.show_chart = show_chart
 
-    def get_method_name(self):
+    def get_name(self):
         return "fruitfly"
 
     # --- lifecycle ---

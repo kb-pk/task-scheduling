@@ -7,10 +7,9 @@ import numpy as np
 from sklearn.utils import shuffle
 
 import scheduler.Common as Common
-from .BaseMethod import BaseMethod, Lang
-from scheduler.Parametrs import ParamDef, register_method
+from scheduler.methods.BaseMethod import BaseMethod
+from scheduler.Parameters import ParamDef
 
-@register_method
 class PittPermMethod(BaseMethod):
     PARAM_DEFS = [
         ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
@@ -50,7 +49,7 @@ class PittPermMethod(BaseMethod):
     # ------------------------------------------------------------
     # Identyfikacja i opis
     # ------------------------------------------------------------
-    def get_method_name(self) -> str:
+    def get_name(self) -> str:
         """
         Nazwa metody używana w plikach wynikowych.
         """

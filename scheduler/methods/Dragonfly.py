@@ -1,9 +1,8 @@
 import numpy as np
 import scheduler.Common as Common
-from .BaseMethod import BaseMethod, Lang
-from scheduler.Parametrs import ParamDef, register_method
+from scheduler.methods.BaseMethod import BaseMethod
+from scheduler.Parameters import ParamDef
 
-@register_method
 class DragonflyMethod(BaseMethod):
     PARAM_DEFS = [
         ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
@@ -61,7 +60,7 @@ class DragonflyMethod(BaseMethod):
         self.neighbour_radius_thresh = neighbour_radius_factor * (len(self.machines) - 1)
         self.show_chart = show_chart
 
-    def get_method_name(self):
+    def get_name(self):
         return "dragonfly"
 
     # --- lifecycle ---

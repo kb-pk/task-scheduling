@@ -1,79 +1,100 @@
-from .methods import Michigan
-from .methods import Pitt_direct
-from .methods import Pitt_perm
-from .methods import Dragonfly
-from .methods import Fruitfly
-from .methods.BaseMethod import BaseMethod
-from . import Common
-
 import time
-from typing import Optional, Type
-from .Parametrs import get_or_set_method
+from typing import Type
 
-current_algorithm: Optional[BaseMethod] = None
+import scheduler.Common as Common
+from scheduler.MethodRegistry import MethodRegistry
+from scheduler.ProgramState import ProgramState
+from scheduler.methods.BaseMethod import BaseMethod
 
-def run_algorithm(alg_cls: Type[BaseMethod], values_list=None, *, auto_outputs=True):
-    """
-    Reuse singleton:
-      - create if none
-      - else update ALL params (set_parameters) z listy
-      - run()
-    """
-    global current_algorithm
-    try:
-        current_algorithm = get_or_set_method(alg_cls, values_list)
-    except Exception as e:
-        print(f"[Param ERROR] {getattr(alg_cls,'__name__',alg_cls)}: {e}")
-        return
-    try:
-        current_algorithm.run()
-    except Exception as e:
-        print(f"[Run ERROR] {alg_cls.__name__}: {e}")
-
-def choices(x):
-    if x == 1:
-        run_algorithm(Pitt_perm.PittPermMethod, values_list=[100, 10, 0.01, 0.01, False])
-        time.sleep(1)
-    elif x == 2:
-        run_algorithm(Pitt_direct.PittDirectMethod, values_list=[100, 10, 1, 0.01, False])
-        time.sleep(1)
-    elif x == 3:
-        run_algorithm(Michigan.MichiganMethod, values_list=[100, 0.01, False])
-        time.sleep(1)
-    elif x == 4:
-        run_algorithm(Dragonfly.DragonflyMethod, values_list=[100, 30, 0.9, 0.1, 0.1, 0.1, 2.0, 1.0, 0.5, False])
-    elif x == 5:
-        run_algorithm(Fruitfly.FruitflyMethod, values_list=[100, 10, 5, False])
-        time.sleep(1)
-    elif x == 6:
-        Common.scheduling_mode = Common.ENERGY_MODE if Common.scheduling_mode == Common.MAKESPAN_MODE else Common.MAKESPAN_MODE
-    elif x == 7:
-        Common.output_mode = (Common.output_mode + 1) % len(Common.output_modes)
-    elif x == 8:
-        exit()
-    else:
-        print('Wrong choice')
-        time.sleep(1)
+from lang.Lang import T as T
+from scheduler.methods.Dragonfly import DragonflyMethod
+from scheduler.methods.Fruitfly import FruitflyMethod
+from scheduler.methods.Michigan import MichiganMethod
+from scheduler.methods.Pitt_direct import PittDirectMethod
+from scheduler.methods.Pitt_perm import PittPermMethod
 
 
-def main():
-    Common.prepare_results_directory()
-    while True:
-        try:
-            userInput = int(input("Which algorithm would you like to use?\n"
-                "1. Permutation-based Pitt algorithm\n"
-                "2. Direct Pitt algorithm\n"
-                "3. Michigan algorithm\n"
-                "4. Dragonfly algorithm\n"
-                "5. Fruitfly algorithm\n"
-                "6. Switch scheduling mode (current mode: " + Common.scheduling_modes[Common.scheduling_mode] + ")\n" +
-                "7. Switch output mode (current mode: " + Common.output_modes[Common.output_mode] + ")\n" +
-                "8. Exit program\n"))
-            choices(userInput)
-        except ValueError:
-            print("Please enter a valid number.")
+class Main:
+    def __init__(self, state: ProgramState):
+        self.__state = state
+        self.T = T(self.__state)
+
+        # intialize registered methods with current state
+        self.__methods = {}
+        for name, method in MethodRegistry.get_registry().items():
+            self.__methods[name] = method(self.__state)
+
+    def main(self):
+        Common.prepare_results_directory()
+
+        prompt = self.T.tl([
+            "Which algorithm would you like to use?",
+            "1. ", "Pitt (direct)",
+            "2. ", "Pitt (permutation-based)",
+            "3. ", "Michigan",
+            "4. ", "Dragonfly",
+            "5. ", "Fruitfly",
+            "6. ", "Switch scheduling mode (current mode: ", self.__state.scheduling.get(), ")",
+            "7. ", "Switch output mode (current mode: ", self.__state.output.get(), ")",
+            "8. ", "Exit program"
+        ])
+
+        while True:
+            try:
+                for choice in prompt:
+                    print(choice)
+
+                user_choice = int(input())
+                self.choices(user_choice)
+            except ValueError:
+                print(self.T.t("Invalid choice"))
+                time.sleep(1)
+
+    def run_algorithm(self, selected_method_name: str):
+        instance = self.__methods.get(selected_method_name)
+
+        self.get_params_from_user(instance)
+        instance.run()
+
+    def get_params_from_user(self, method: Type[BaseMethod]):
+        pass
+
+    def choices(self, x):
+        # TODO - this shouldnt be a literal, but a `class.__name__` or just `class`!
+        if x == 1:
+            self.run_algorithm("PittDirectMethod")
+            time.sleep(1)
+        elif x == 2:
+            self.run_algorithm("PittPermMethod")
+            time.sleep(1)
+        elif x == 3:
+            self.run_algorithm("MichiganMethod")
+            time.sleep(1)
+        elif x == 4:
+            self.run_algorithm("DragonflyMethod")
+            time.sleep(1)
+        elif x == 5:
+            self.run_algorithm("FruitflyMethod")
+            time.sleep(1)
+        elif x == 6:
+            self.__state.scheduling.set(
+                (self.__state.scheduling.get() + 1) % len(self.__state.scheduling.State)
+            )
+
+            current = self.__state.scheduling.get()
+            next = (current + 1) % len(self.__state.scheduling.State) + 1
+            self.__state.scheduling.set(next)
+        elif x == 7:
+            self.__state.output.set(
+                (self.__state.output.get() + 1) % len(self.__state.output.State)
+            )
+        elif x == 8:
+            exit()
+        else:
+            print('Wrong choice')
             time.sleep(1)
 
-
 if __name__ == "__main__":
-    main()
+    program_state = ProgramState()
+
+    main = Main(program_state).main()

@@ -1,14 +1,11 @@
-import csv
 from random import randint
 import numpy as np
 import pandas as pd
 
-from .BaseMethod import BaseMethod
-from .BaseMethod import Lang
+from scheduler.methods.BaseMethod import BaseMethod
 import scheduler.Common as Common
-from scheduler.Parametrs import ParamDef, register_method
+from scheduler.Parameters import ParamDef
 
-@register_method
 class MichiganMethod(BaseMethod):
     PARAM_DEFS = [
         ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
@@ -29,7 +26,7 @@ class MichiganMethod(BaseMethod):
         self.pm = pm
         self.show_chart = show_chart
 
-    def get_method_name(self):
+    def get_name(self):
         """
         Zwraca unikalną nazwę metody (używana w plikach wynikowych).
         """

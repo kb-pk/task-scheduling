@@ -4,82 +4,78 @@ from typing import List, Tuple, Dict
 import numpy as np
 
 import scheduler.Common as Common
-from .BaseMethod import BaseMethod, Lang
-from scheduler.Parametrs import ParamDef, register_method
+from scheduler.MethodRegistry import MethodRegistrator
+from scheduler.ProgramState import ProgramState
+from scheduler.methods.BaseMethod import BaseMethod
+from scheduler.Parameters import ParamDef2, ParamValueTypes, PopulationValidator
 
-@register_method
+@MethodRegistrator.register_method
 class PittDirectMethod(BaseMethod):
-    PARAM_DEFS = [
-        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
-        ParamDef("population_size", "int", 10, "Population size (must be even)", min_value=2),
-        ParamDef("crossover_points", "int", 1, "Number of crossover points", min_value=1),
-        ParamDef("mutation_probability", "float", 0.01, "Gene mutation probability", min_value=0.0, max_value=1.0),
-        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
-    ]
+    def __init__(self, state: ProgramState):
+        super().__init__(state)
 
-    def __init__(self,
-                 iterations: int = 100,
-                 population_size: int = 10,
-                 crossover_points: int = 1,
-                 mutation_probability: float = 0.01,
-                 show_chart: bool = True):
-        super().__init__(iterations=iterations, show_chart=show_chart)
-        self.population_size = population_size
-        self.crossover_points = crossover_points
-        self.pm = mutation_probability
-
-        self._tasks_possible_machines: Dict[int, List[int]] = {}
+        self._tasks_possible_machines: Dict[int, List[int]] = self._map_possible_machines_to_tasks()
         self.population: List[List[int]] = []
         self.best_individual: List[int] | None = None
         self.best_score: float | None = None
-        self.other_score: float | None = None
 
-    def set_parameters(self, iterations=100, population_size=10, crossover_points=1, mutation_probability=0.01, show_chart=True):
-        self.iterations = iterations
-        self.population_size = population_size
-        self.crossover_points = crossover_points
-        self.pm = mutation_probability
-        self.show_chart = show_chart
+        self.PARAM_DEFS = [
+            ParamDef2(self.T.t("Iterations"), ParamValueTypes.INT, 100, self.T.t("Number of iterations (epochs)"),
+                      min_value=1),
+            ParamDef2(self.T.t("Population size"), ParamValueTypes.INT, 10, self.T.t("Population size (must be even)"),
+                      min_value=2,
+                      validator=PopulationValidator()),
+            ParamDef2(self.T.t("Crossover points"), ParamValueTypes.INT, 1, self.T.t("Number of crossover points"),
+                      min_value=1, max_value=len(self.tasks)),
+            ParamDef2(self.T.t("Mutation probability"), ParamValueTypes.FLOAT, 0.01, self.T.t("Gene mutation probability"),
+                      min_value=0.0, max_value=1.0),
+        ]
 
-    # ---------- Identyfikacja / opis ----------
+        # defaults (for easier access - therefore hacky)
+        self._iterations = self.PARAM_DEFS[0].get_value()
+        self._pop_size = self.PARAM_DEFS[1].get_value()
+        self._crossover_points = self.PARAM_DEFS[2].get_value()
+        self._mutation_probability = self.PARAM_DEFS[3].get_value()
 
-    def get_method_name(self) -> str:
-        return "pitt_direct"
+        self.name = self.T.t("Pitt (direct)")
+        self.description = self.T.td({
+            self.state.lang.State.pl_PL : """
+            Algorytm oparty o podejście Pitt, reprezentacja bezpośrednia.
 
-    # ---------- Cykl życia ----------
+            Osobnik - reprezentacja konkretnego harmonogramu zadań dla wszystkich maszyn. Składa się z 1 chromosomu.
+            Chromosom - harmonogram zadań dla wszystkich maszyn. Składa się z N (liczba zadań) genów.
+            Gen - reprezentacja maszyny (machine_id). Indeks genu w chromosomie to numer zadania przypisanego do maszyny. Geny mogą powtarzać się w chromosomie.
+
+            Selekcja - brak selekcji pomiędzy epokami.
+
+            Krzyżowanie - n-punktowe, każdy osobnik bierze udział.
+
+            Mutacja - losowanie nowej wartości genu (machine_id) wewnątrz chromosomu.
+            """,
+            self.state.lang.State.en_GB: """
+            Algorithm based on the Pitt approach, direct representation.
+
+            Entity - a representation of a particular schedule of tasks for all machines. Made up of 1 chromosome.
+            Chromosome - a particular schedule of tasks for all machines. Made up of N (task number) genes.
+            Gene - a representation of a machine (machine_id). The index of a gene in a chromosome is a number of a task that's assigned to this machine. Genes can repeat in the chromosome.
+
+            Selection - no selection between epochs.
+
+            Crossover - n-point, every entity takes part.
+
+            Mutation - a gene's value (machine_id) is replaced with a new, randomly generated one.
+            """
+        })
 
     def initialize(self):
-        """
-        Przygotowanie:
-          - Budowa mapy możliwych maszyn dla zadań.
-          - Generacja populacji startowej.
-          - Ocena i zapamiętanie najlepszego.
-        """
-        if self.population_size % 2 != 0:
-            raise ValueError("Population size should be even for pairing in crossover.")
-        if self.crossover_points < 1:
-            raise ValueError("crossover_points must be >= 1")
-
-        self._tasks_possible_machines = self._map_possible_machines_to_tasks()
-        self.population = [self._generate_individual() for _ in range(self.population_size)]
+        self.population = [self._generate_individual() for _ in range(self._pop_size)]
         self._evaluate_population_initial()
 
     def optimize(self):
-        """
-        Pętla epok:
-          - Krzyżowanie populacji
-          - Mutacja populacji
-          - Ocena oraz aktualizacja najlepszego osobnika
-        """
-        for epoch in range(self.iterations):
-            self.population = self._crossover_population(self.population)
-            self.population = self._mutate_population(self.population)
-            improved = self._evaluate_population_update_best()
-            if improved:
-                if Common.scheduling_mode == Common.MAKESPAN_MODE:
-                    print(f"[{epoch}] New best makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
-                else:
-                    print(f"[{epoch}] New best energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
+        for epoch in range(self._iterations):
+            self._crossover_population()
+            self._mutate_population()
+            self._evaluate_population_update_best(epoch)
 
     def get_best_solution(self):
         """
@@ -88,88 +84,32 @@ class PittDirectMethod(BaseMethod):
         return self.best_individual
 
     def build_schedule_map(self, solution: List[int]):
-        """
-        Konwersja listy przypisań (task -> machine_id) na mapę {machine_id: [task_id,...]}.
-        Zachowuje rosnący porządek ID zadań.
-        """
         schedule_map = {m_id: [] for m_id in self.machines.index.values}
         for task_id, machine_id in enumerate(solution):
             schedule_map[machine_id].append(task_id)
         return schedule_map
 
-    def after_run(self, schedule_map, makespan, total_energy):
-        """
-        Dodatkowy log wyników do pliku tekstowego.
-        """
-        if Common.scheduling_mode == Common.MAKESPAN_MODE:
-            primary = makespan
-            secondary = total_energy
-        else:
-            primary = total_energy
-            secondary = makespan
-        with open("results/result_pitt_direct", "a") as f:
-            f.write(f"{primary},{secondary}\n")
-
-    # ---------- Generacja / ocena ----------
-
     def _map_possible_machines_to_tasks(self) -> Dict[int, List[int]]:
         """
-        Dla każdego zadania listuje maszyny spełniające wymagania bezpieczeństwa.
-        {task_id: [machine_id,...]}
+        Mapuje zadania i maszyny, które dane zadanie mogą wykonać (na podstawie features).
+        :return: Słownik {task_id: [machine_id, machine_id, ...], ...}
         """
-        mapping = {}
-        for task_id in self.tasks.index.values:
-            allowed = [
-                machine_id for machine_id in self.machines.index.values
-                if Common.can_execute_task_on_machine(
-                    self.machines.iloc[machine_id],
-                    self.tasks.iloc[task_id],
-                    self.features
-                )
-            ]
-            if not allowed:
-                raise ValueError(f"No feasible machine for task {task_id}")
-            mapping[task_id] = allowed
-        return mapping
+        possible_machines_for_tasks = {task_id: [
+            machine_id for machine_id in self.machines.index.values
+            if Common.can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id], self.features)
+        ] for task_id in self.tasks.index.values}
+
+        return possible_machines_for_tasks
 
     def _generate_individual(self) -> List[int]:
-        """
-        Losowe przypisanie każdego zadania do jednej z dozwolonych maszyn.
-        Gwarantuje (heurystycznie), że każda maszyna pojawi się co najmniej raz:
-          - najpierw jedno zadanie per maszyna (jeśli możliwe),
-          - potem reszta losowo.
-        """
-        n_tasks = len(self.tasks)
-        n_machines = len(self.machines)
-        assignment = [-1] * n_tasks
+        individual = []
 
-        # Faza 1: spróbuj zapewnić każdej maszynie jedno zadanie (jeśli liczba zadań >= maszyn)
-        unassigned_tasks = list(range(n_tasks))
-        random.shuffle(unassigned_tasks)
-        used_tasks = set()
-        for m_id in range(n_machines):
-            # znajdź pierwsze zadanie, które może trafić na m_id
-            found = False
-            for t in unassigned_tasks:
-                if t in used_tasks:
-                    continue
-                if m_id in self._tasks_possible_machines[t]:
-                    assignment[t] = m_id
-                    used_tasks.add(t)
-                    found = True
-                    break
-            if not found:
-                # fallback: jeśli nie można - pozostaw do losowego przydziału
-                pass
+        for task_id, possible_machines in self._tasks_possible_machines.items():
+            individual.append(random.choice(possible_machines))
 
-        # Faza 2: pozostałe zadania
-        for t in range(n_tasks):
-            if assignment[t] == -1:
-                assignment[t] = random.choice(self._tasks_possible_machines[t])
+        self._ensure_all_machines_present(individual)
 
-        # Walidacja – jeśli któraś maszyna nie otrzymała zadania, naprawa
-        self._ensure_all_machines_present(assignment)
-        return assignment
+        return individual
 
     def _ensure_all_machines_present(self, individual: List[int]):
         """
@@ -193,67 +133,42 @@ class PittDirectMethod(BaseMethod):
             counts[donor] -= 1
             counts[m_missing] += 1
 
-    def _evaluate_individual(self, indiv: List[int]) -> Tuple[float, float]:
-        """
-        Oblicza (primary_metric, secondary_metric):
-          - makespan
-          - energy
-        Wybór primary zależy od scheduling_mode.
-        """
-        n_machines = len(self.machines)
-        machine_times = [0.0] * n_machines
-        for task_id, machine_id in enumerate(indiv):
-            machine_times[machine_id] += self.etc[task_id][machine_id]
-        makespan = max(machine_times)
-        total_energy = 0.0
-        for m_id, busy in enumerate(machine_times):
-            p_busy = self.machines.values[m_id][2]
-            p_idle = self.machines.values[m_id][3]
-            total_energy += busy * p_busy + (makespan - busy) * p_idle
-        if Common.scheduling_mode == Common.ENERGY_MODE:
-            return total_energy, makespan
-        return makespan, total_energy
+    def _evaluate_population(self):
+        for individual in self.population:
+            decode = self.build_schedule_map(individual)
+            fitness = self._fitness_function(decode)
+
+            if self.best_individual is None or fitness < self.best_score:
+                self.best_individual = individual.copy()
+                self.best_score = fitness
 
     def _evaluate_population_initial(self):
         """
         Ocena pierwszej populacji i ustawienie pól best_*.
         """
-        for ind in self.population:
-            main_val, other_val = self._evaluate_individual(ind)
-            if self.best_individual is None or main_val < self.best_score:
-                self.best_individual = ind[:]
-                self.best_score = main_val
-                self.other_score = other_val
-        if Common.scheduling_mode == Common.MAKESPAN_MODE:
-            print(f"Initial makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
-        else:
-            print(f"Initial energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
+        self._evaluate_population()
 
-    def _evaluate_population_update_best(self) -> bool:
+        self.logger.initial_solution(self.best_score)
+
+    def _evaluate_population_update_best(self, epoch):
         """
         Ocena po operatorach. Aktualizuje best_* jeśli znajdzie lepszy osobnik.
-        :return: True jeśli poprawiono wynik.
         """
-        improved = False
-        for ind in self.population:
-            main_val, other_val = self._evaluate_individual(ind)
-            if main_val < self.best_score:
-                self.best_individual = ind[:]
-                self.best_score = main_val
-                self.other_score = other_val
-                improved = True
-        return improved
+        last_best = self.best_score
+        self._evaluate_population()
+        has_improved = last_best != self.best_score
+        if has_improved:
+            self.logger.better_solution_found(self.best_score, epoch)
 
-    # ---------- Operatory genetyczne ----------
-
-    def _crossover_population(self, population: List[List[int]]) -> List[List[int]]:
+    def _crossover_population(self):
         """
         N‑punktowe krzyżowanie par osobników po losowym przetasowaniu.
         Walidacja: każdy potomek musi zawierać wszystkie machine_id (powtarzamy losowanie segmentów aż spełni warunek).
         """
-        shuffled = population[:]
+        shuffled = self.population
         random.shuffle(shuffled)
         new_pop: List[List[int]] = []
+
         for i in range(0, len(shuffled), 2):
             parents = shuffled[i:i + 2]
             if len(parents) < 2:
@@ -262,7 +177,8 @@ class PittDirectMethod(BaseMethod):
             a, b = self._crossover_pair(parents[0], parents[1])
             new_pop.append(a)
             new_pop.append(b)
-        return new_pop
+
+        self.population = new_pop
 
     def _crossover_pair(self, p1: List[int], p2: List[int]) -> Tuple[List[int], List[int]]:
         """
@@ -271,9 +187,10 @@ class PittDirectMethod(BaseMethod):
           - Naprzemiennie dokleja segmenty z rodziców.
           - Waliduje obecność wszystkich maszyn (powtarza jeśli niepoprawne).
         """
+
         n = len(p1)
         while True:
-            points = sorted(random.sample(range(0, n - 1), self.crossover_points))
+            points = sorted(random.sample(range(0, n - 1), self._crossover_points))
             child1, child2 = [], []
             prev = 0
             for idx, cp in enumerate(points):
@@ -303,53 +220,30 @@ class PittDirectMethod(BaseMethod):
         machines_set = set(self.machines.index.values)
         return machines_set.issubset(set(individual))
 
-    def _mutate_population(self, population: List[List[int]]) -> List[List[int]]:
+    def _mutate_population(self):
         """
         Mutacja populacji: dla każdego genu wywołanie mutacji z prawdopodobieństwem pm
         (jeśli nie pozbawia maszyny wszystkich zadań).
         """
-        mutated = []
-        for ind in population:
-            mutated.append(self._mutate_individual(ind))
-        return mutated
+        for ind in self.population:
+            self._mutate_individual(ind)
 
-    def _mutate_individual(self, individual: List[int]) -> List[int]:
-        """
-        Mutacja osobnika – tworzy nową listę (kopię z ewentualnymi zmianami).
-        """
-        result = individual[:]
+    def _mutate_individual(self, individual: List[int]):
         counts = {m: 0 for m in self.machines.index.values}
-        for m in result:
+        for m in individual:
             counts[m] += 1
-        for idx, current_m in enumerate(result):
-            if np.random.uniform(0.0, 1.0) <= self.pm:
-                # Możliwość mutacji tylko jeśli maszyna ma >1 zadanie
-                if counts[current_m] > 1:
-                    new_m = self._mutate_gene(current_m)
-                    result[idx] = new_m
-                    counts[current_m] -= 1
-                    counts[new_m] = counts.get(new_m, 0) + 1
-        # Naprawa (teoretycznie zbędna, ale dla pewności):
-        self._ensure_all_machines_present(result)
-        return result
+
+        for idx, current_m in enumerate(individual):
+            # only mutate if the machine has >1 task assigned
+            if np.random.uniform(0.0, 1.0) <= self._mutation_probability and counts[current_m] > 1:
+                new_m = self._mutate_gene(current_m)
+                individual[idx] = new_m
+                counts[current_m] -= 1
+                counts[new_m] = counts.get(new_m, 0) + 1
 
     def _mutate_gene(self, current_machine: int) -> int:
-        """
-        Losuje nowy machine_id różny od current_machine.
-        (Zachowuje zachowanie oryginalne: brak weryfikacji cech zadania.)
-        """
         n_machines = len(self.machines)
         while True:
             val = random.randint(0, n_machines - 1)
             if val != current_machine:
                 return val
-
-
-# Punkt wejścia testowego
-if __name__ == "__main__":
-    alg = PittDirectMethod(iterations=100,
-                           population_size=10,
-                           crossover_points=1,
-                           mutation_probability=0.01,
-                           show_chart=True)
-    alg.run()
