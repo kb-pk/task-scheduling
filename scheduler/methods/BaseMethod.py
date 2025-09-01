@@ -11,7 +11,7 @@ from scheduler.ProgramState import ProgramState
 class BaseMethod(ABC):
     PARAM_DEFS = []
 
-    def __init__(self, state: ProgramState):
+    def __init__(self, state: ProgramState, logger: Logger, t: T):
         self.features = Common.read_security_features()
         self.machines = Common.read_machines(self.features)
         self.tasks = Common.read_tasks(self.features)
@@ -26,8 +26,8 @@ class BaseMethod(ABC):
         self.description = None
 
         self.state = state
-        self.logger = Logger(self.state)
-        self.T = T(self.state)
+        self.logger = logger
+        self.T = t
 
     def set_parameters(self, method_params: list[ParamDef]):
         """

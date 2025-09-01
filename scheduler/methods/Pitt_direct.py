@@ -4,15 +4,17 @@ from typing import List, Tuple, Dict
 import numpy as np
 
 import scheduler.Common as Common
-from scheduler.MethodRegistry import MethodRegistrator
+from lang.Lang import T
+from scheduler.Logger import Logger
 from scheduler.ProgramState import ProgramState
+from scheduler.Registry import MethodRegistrator
 from scheduler.methods.BaseMethod import BaseMethod
 from scheduler.Parameters import ParamDef2, ParamValueTypes, PopulationValidator
 
-@MethodRegistrator.register_method
+@MethodRegistrator.register_class
 class PittDirectMethod(BaseMethod):
-    def __init__(self, state: ProgramState):
-        super().__init__(state)
+    def __init__(self, state: ProgramState, logger: Logger, t: T):
+        super().__init__(state, logger, t)
 
         self._tasks_possible_machines: Dict[int, List[int]] = self._map_possible_machines_to_tasks()
         self.population: List[List[int]] = []
