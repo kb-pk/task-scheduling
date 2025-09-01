@@ -21,6 +21,9 @@ class BaseMethod(ABC):
         self.tasks = self.cache[MethodCache.CacheObject.tasks]
         self.etc = self.cache[MethodCache.CacheObject.etc_matrix]
 
+        if len(self.machines) > len(self.tasks):
+            raise AssertionError("Number of tasks exceeds number of machines - machines cannot be without tasks")
+
         # Cached last run artifacts (for GUI one‑click access)
         self.last_schedule_map = None
         self.last_solution = None
