@@ -13,12 +13,15 @@ class Logger:
     def __get_scheduling_mode(self):
         return self.__state.scheduling.get().name
 
+    def __get_output_mode(self):
+        return self.__state.output.get().name
+
     def better_solution_found(self, value, epoch):
-        message = f"Better {self.__get_scheduling_mode()} found in epoch {epoch} - {value}"
+        message = f"Better {self.__get_scheduling_mode()} found in epoch {epoch}, {self.__get_output_mode()} - {value}"
         self.__log(message)
 
     def initial_solution(self, value):
-        message = f"Initial {self.__get_scheduling_mode()} - {value}"
+        message = f"Initial {self.__get_output_mode()} - {value}"
         self.__log(message)
 
     def error_invalid_parameter_ui(self, value):
