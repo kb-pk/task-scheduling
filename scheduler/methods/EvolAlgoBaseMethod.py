@@ -26,7 +26,7 @@ class EvolAlgoBaseMethod(BaseMethod):
         self._pop_size = self.PARAM_DEFS[1].get_value()
 
     def initialize(self):
-        self.population = [self._generate_individual() for _ in range(self._pop_size)]
+        self._generate_population()
         self._evaluate_population_initial()
 
     def optimize(self):
@@ -36,7 +36,7 @@ class EvolAlgoBaseMethod(BaseMethod):
             self._evaluate_population_update_best(epoch)
 
     @abstractmethod
-    def _generate_individual(self):
+    def _generate_population(self):
         pass
 
     @abstractmethod
