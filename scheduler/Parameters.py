@@ -20,8 +20,7 @@ class ParamDef:
     _CASTERS: Dict[ParamValueTypes, Callable[[Any], Any]] = {
         ParamValueTypes.INT: int,
         ParamValueTypes.FLOAT: float,
-        ParamValueTypes.BOOLEAN: lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ("1", "true", "t",
-                                                                                                    "yes", "y", "on"),
+        ParamValueTypes.BOOLEAN: bool,
         ParamValueTypes.LIST_SINGLE: lambda v: v if isinstance(v, list) and
                                                     len(v) > 0 and
                                                     isinstance(v[0], ParamDef) else []
