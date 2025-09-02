@@ -469,21 +469,21 @@ class GUI(tk.Tk, UI):
     def _render_plots(self, method: BaseMethod) -> None:
         try:
             history_fn = getattr(method, 'get_history', None)
-            ys_mk, ys_out = [], []
+            ys_mk, ys_en = [], []
             if callable(history_fn):
                 hist = history_fn()
                 # Handle both legacy dict and new list[IndividualFitness]
                 if isinstance(hist, dict):
                     ys_mk = list(hist.get('makespan', []))
-                    out_series = 'energy' if self.state.output.get() == self.state.output.State.energy else 'makespan'
-                    ys_out = list(hist.get(out_series, []))
+                    ys_en = list(hist.get('energy', []))
                 elif isinstance(hist, list):
                     try:
                         mk_key = self.state.scheduling.State.makespan
+                        en_key = self.state.scheduling.State.energy
                         ys_mk = [float(h.get_all()[mk_key]) for h in hist if h is not None]
-                        ys_out = [float(h.output()) for h in hist if h is not None]
+                        ys_en = [float(h.get_all()[en_key]) for h in hist if h is not None]
                     except Exception:
-                        ys_mk, ys_out = [], []
+                        ys_mk, ys_en = [], []
 
             # Clear containers
             self._clear_children(self._linear_energy)
@@ -493,15 +493,13 @@ class GUI(tk.Tk, UI):
 
             if _HAS_MPL:
                 self._draw_mpl_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
-                out_name = self.state.output.get().name.capitalize()
-                self._draw_mpl_line(self._linear_energy, ys_out, title=f"{out_name} over Epochs", y_label=out_name)
+                self._draw_mpl_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
                 # Gantt with matplotlib
                 self._draw_mpl_gantt_makespan(self._gantt_makespan, method)
                 self._draw_mpl_gantt_energy(self._gantt_energy, method)
             else:
                 self._draw_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
-                out_name = self.state.output.get().name.capitalize()
-                self._draw_line(self._linear_energy, ys_out, title=f"{out_name} over Epochs", y_label=out_name)
+                self._draw_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
         except Exception:
             import traceback
             self._append_diag(traceback.format_exc(), tag="err")
