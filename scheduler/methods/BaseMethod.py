@@ -26,7 +26,7 @@ class BaseMethod(ABC):
         self.etc = self.cache[MethodCache.CacheObject.etc_matrix]
 
         if len(self.machines) > len(self.tasks):
-            raise AssertionError("Number of tasks exceeds number of machines - machines cannot be without tasks")
+            raise AssertionError(self.T.t("Number of tasks exceeds number of machines - machines cannot be without tasks"))
 
         # Cached last run artifacts (for GUI one‑click access)
         self.last_schedule_map = None
@@ -67,6 +67,13 @@ class BaseMethod(ABC):
     @abstractmethod
     def build_schedule_map(self, solution):
         """Konwersja solution -> {machine_id: [task_ids]}."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def stop(self):
+        """
+        Stop criterion
+        """
         raise NotImplementedError
 
     def run(self):
