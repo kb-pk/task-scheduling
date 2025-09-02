@@ -28,11 +28,9 @@ class BaseMethod(ABC):
         if len(self.machines) > len(self.tasks):
             raise AssertionError(self.T.t("Number of tasks exceeds number of machines - machines cannot be without tasks"))
 
-        # Cached last run artifacts (for GUI one‑click access)
-        self.last_schedule_map = None
         self.last_solution = None
 
-        self.best_individual = None
+        self.best_solution = None
         self.best_score = None
 
         self.name = None
@@ -54,7 +52,7 @@ class BaseMethod(ABC):
         return self.description
 
     def get_best_solution(self):
-        return self.best_individual
+        return self.best_solution
 
     @abstractmethod
     def initialize(self):
@@ -80,15 +78,11 @@ class BaseMethod(ABC):
         self._reset()
         self.initialize()
         self.optimize()
-        solution = self.get_best_solution()
-        schedule_map = self.build_schedule_map(solution)
 
-        # cache results
-        self.last_solution = solution
-        self.last_schedule_map = schedule_map
+        self.last_solution = self.get_best_solution()
 
     def _reset(self):
-        self.best_individual = None
+        self.best_solution = None
         self.best_score = None
 
     def _get_loads(self, schedule_map):

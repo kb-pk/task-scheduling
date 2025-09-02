@@ -80,8 +80,8 @@ class EvolAlgoBaseMethod(BaseMethod):
             decode = self.build_schedule_map(individual)
             f = self._fitness(decode)
 
-            if self.best_individual is None or f.scheduling() < self.best_score.scheduling():
-                self.best_individual = individual
+            if self.best_solution is None or f.scheduling() < self.best_score.scheduling():
+                self.best_solution = decode
                 self.best_score = f
 
     def _evaluate_population_initial(self):
