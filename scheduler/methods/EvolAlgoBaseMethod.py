@@ -116,15 +116,28 @@ class EvolAlgoBaseMethod(BaseMethod):
         if has_improved:
             self.logger.better_solution_found(self.best_score.output(), self._epoch)
 
+    def __can_execute_task_on_machine(self, task, machine):
+        for feature_id in self.features.index.values:
+            feature_name = self.features.values[feature_id][0]
+            if task[feature_name] > machine[feature_name]:
+                return False
+
+        return True
+
     def _map_possible_machines_to_tasks(self):
         """
         Maps tasks and machines, on which the tasks can be executed (based on security features)
 
         :return: {task_id: [machine_id, machine_id, ...], ...}
         """
-        possible_machines_for_tasks = {task_id: [
-            machine_id for machine_id in self.machines.index.values
-            if Common.can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id], self.features)
-        ] for task_id in self.tasks.index.values}
+        if self._security_features.get_value():
+             possible_machines_for_tasks = {task_id: [
+                machine_id for machine_id in self.machines.index.values
+                if self.__can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id])
+            ] for task_id in self.tasks.index.values}
+        else:
+            possible_machines_for_tasks = {task_id: [
+                machine_id for machine_id in self.machines.index.values
+            ] for task_id in self.tasks.index.values}
 
         return possible_machines_for_tasks

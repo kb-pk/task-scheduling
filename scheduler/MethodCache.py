@@ -32,6 +32,23 @@ class MethodCache:
 
         return self.__cache[key]
 
+    def __are_security_features_correct(self, item):
+        """
+        Sprawdzenie czy cechy bezpieczeństwa na maszynie lub w zadaniu są mniejsze niż definicja
+        :param item: wiersz z macierzy maszyn lub zadań
+        :param features: macierz cech
+        :return: False jeśli dowolna cecha maszyny lub zadania jest większa niż definicja, True w przeciwnym wypadku
+        """
+        features = self[self.CacheObject.security_features]
+
+        for feature_id in features.index.values:
+            feature_name = features.values[feature_id][0]
+            feature_value = features.values[feature_id][1]
+            if item[feature_name] > feature_value:
+                return False
+
+        return True
+
     def __read_security_features(self):
         """
         Wczytanie listy cech bezpieczeństwa i ich wag, lista cech może być dowolnie długa
@@ -63,7 +80,7 @@ class MethodCache:
                                names=column_names)
 
         for machine_id in machines.index.values:
-            if not Common.are_security_features_correct(machines.iloc[machine_id], features):
+            if not self.__are_security_features_correct(machines.iloc[machine_id]):
                 raise Exception(
                     "Machine features greater than defined. Machine:\n" + machines.iloc[machine_id].to_string())
 
@@ -84,7 +101,7 @@ class MethodCache:
         tasks = pd.read_csv(tasks_filename, skiprows=skip_rows, delimiter=column_delimiter, index_col=False,
                             names=column_names)
         for task_id in tasks.index.values:
-            if not Common.are_security_features_correct(tasks.iloc[task_id], features):
+            if not self.__are_security_features_correct(tasks.iloc[task_id]):
                 raise Exception(
                     "Task features requirements greater than defined. Task:\n" + tasks.iloc[task_id].to_string())
 
