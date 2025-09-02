@@ -39,8 +39,7 @@ class CLI(UI):
                 "6. " + self.T.t("Switch scheduling mode (current mode: ") + self.state.scheduling.get().name + ")",
                 "7. " + self.T.t("Switch output mode (current mode: ") + self.state.output.get().name + ")",
                 "8. " + self.T.t("Switch stop criterion (current mode: " + self.state.stop_criterion.get().name + ")"),
-                "9. " + self.T.t("Enable security features (current mode: " + self.state.security_features.get().name + ")"),
-                "10. " + self.T.t("Exit program")
+                "9. " + self.T.t("Exit program")
             ]
 
             for choice in prompt:
@@ -57,38 +56,33 @@ class CLI(UI):
 
     def choices(self, x):
         # TODO - this shouldnt be a literal, but a `class.__name__` or just `class`!
-        if x == 1:
-            self.method_instances["PittDirectMethod"].run()
-            time.sleep(1)
-        elif x == 2:
-            self.method_instances["PittPermMethod"].run()
-            time.sleep(1)
-        elif x == 3:
-            self.method_instances["MichiganMethod"].run()
-            time.sleep(1)
-        elif x == 4:
-            self.method_instances["DragonflyMethod"].run()
-            time.sleep(1)
-        elif x == 5:
-            self.method_instances["FruitflyMethod"].run()
-            time.sleep(1)
-        elif x == 6:
-            self.state.scheduling.set(
-                (self.state.scheduling.get().value + 1) % len(self.state.scheduling.State)
-            )
-        elif x == 7:
-            self.state.output.set(
-                (self.state.output.get().value + 1) % len(self.state.output.State)
-            )
-        elif x == 8:
-            self.state.stop_criterion.set(
-                (self.state.stop_criterion.get().value + 1) % len(self.state.stop_criterion.State)
+        if 1 <= x <= 5:
+            # order of methods in the menu
+            methods = [
+                "PittDirectMethod",
+                "PittPermMethod",
+                "MichiganMethod",
+                "DragonflyMethod",
+                "FruitflyMethod",
+            ]
+
+            instance = self.method_instances.get(methods[x])
+            self.parameter_choices(instance)
+
+            instance.run()
+        elif 6 <= x <= 8:
+            states = [
+                self.state.scheduling,
+                self.state.output,
+                self.state.stop_criterion,
+            ]
+
+            current = states[x - 6]
+
+            current.set(
+                (current.get().value + 1) % len (current.State)
             )
         elif x == 9:
-            self.state.security_features.set(
-                (self.state.security_features.get().value + 1) % len(self.state.security_features.State)
-            )
-        elif x == 10:
             exit()
         else:
             print('Wrong choice')
