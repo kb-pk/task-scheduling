@@ -1,53 +1,65 @@
-from .methods import Michigan
-from .methods import Pitt_direct
-from .methods import Pitt_perm
-from .methods import Dragonfly
-from . import Common
-from . import Utils
+from sys import argv
 
-import time
+import scheduler.Common as Common
+from scheduler.MethodCache import MethodCache
+from scheduler.Logger import Logger
+from scheduler.Registry import MethodRegistry
+from scheduler.ProgramState import ProgramState
+from scheduler.Registry import UIRegistry
+from scheduler.UI import UI
+from lang.Lang import T as T
 
-def choices(x):
-    if x == 1:
-        Pitt_perm.main(),
-        time.sleep(1)
-    elif x == 2:
-        Pitt_direct.main(),
-        time.sleep(1)
-    elif x == 3:
-        Michigan.main(),
-        time.sleep(1)
-    elif x == 4:
-        Dragonfly.main(),
-        time.sleep(1)
-    elif x == 5:
-        Common.scheduling_mode = Common.ENERGY_MODE if Common.scheduling_mode == Common.MAKESPAN_MODE else Common.MAKESPAN_MODE
-    elif x == 6:
-        Common.output_mode = (Common.output_mode + 1) % len(Common.output_modes)
-    elif x == 7:
-        exit()
-    else:
-        print('Wrong choice')
-        time.sleep(1)
+#### ------------ DO NOT DELETE THESE IMPORTS!! ------------ ####
+## PyCharm marks them as unused imports, but if
+## they're deleted, Python won't parse the files with methods' classes,
+## and they won't be registered in MethodRegistry!
+from scheduler.methods.Michigan import MichiganMethod
+from scheduler.methods.Pitt_direct import PittDirectMethod
+from scheduler.methods.Pitt_perm import PittPermMethod
+from scheduler.methods.Dragonfly import DragonflyMethod
+from scheduler.methods.Fruitfly import FruitflyMethod
 
 
-def main():
-    Utils.prepare_results_directory()
-    while True:
+class Main:
+    def __init__(self):
+        self.__state: ProgramState = ProgramState()
+        self.T = T(self.__state)
+        self.__ui: UI = self._spawn_interface()
+        self.__logger: Logger = Logger(self.__state, self.__ui.log)
+
+        # intialize registered methods with current state
+        self.__methods = {}
+        # init with same cache
+        cache = MethodCache()
+        for name, method in MethodRegistry.get_registry().items():
+            self.__methods[name] = method(self.__state, self.__logger, self.T, cache)
+
+    def _set_interface(self):
+        # tmp logger since we don't have an "UI" yet, yeah hacky
+        l = Logger(self.__state, print)
+
         try:
-            userInput = int(input("Which algorithm would you like to use?\n"
-                "1. Permutation-based Pitt algorithm\n"
-                "2. Direct Pitt algorithm\n"
-                "3. Michigan algorithm\n"
-                "4. Dragonfly algorithm\n"
-                "5. Switch scheduling mode (current mode: " + Common.scheduling_modes[Common.scheduling_mode] + ")\n" +
-                "6. Switch output mode (current mode: " + Common.output_modes[Common.output_mode] + ")\n" +
-                "7. Exit program\n"))
-            choices(userInput)
-        except ValueError:
-            print("Please enter a valid number.")
-            time.sleep(1)
+            ui = argv[1]
+            self.__state.ui.set(ui)
+        # fallback to default
+        except IndexError:
+            l.error_no_parameter_ui(self.__state.ui.get().name)
+        except KeyError:
+            l.error_invalid_parameter_ui(self.__state.ui.get().name)
 
+    def _spawn_interface(self):
+        self._set_interface()
+        ui = UIRegistry.get_registry().get(self.__state.ui.get().name)
+
+        return ui(self.__state, self.T, self.run_algorithm)
+
+    def main(self):
+        self.__ui.start()
+
+    def run_algorithm(self, selected_method_name: str):
+        instance = self.__methods.get(selected_method_name)
+
+        instance.run()
 
 if __name__ == "__main__":
-    main()
+    Main().main()

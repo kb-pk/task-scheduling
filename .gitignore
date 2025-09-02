@@ -120,7 +120,6 @@ pip-selfcheck.json
 .idea/sqlDataSources.xml
 .idea/dynamic.xml
 .idea/uiDesigner.xml
-.DS_Store
 
 # Gradle:
 .idea/gradle.xml
@@ -155,3 +154,4 @@ fabric.properties
 # custom
 results/
 .vscode/
+.DS_Store
