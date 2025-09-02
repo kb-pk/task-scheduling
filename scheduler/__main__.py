@@ -24,8 +24,7 @@ class Main:
     def __init__(self):
         self.__state: ProgramState = ProgramState()
         self.T = T(self.__state)
-        self.__ui: UI = self._spawn_interface()
-        self.__logger: Logger = Logger(self.__state, self.__ui.log)
+        self.__logger: Logger = Logger(self.__state, self.__log)
 
         # intialize registered methods with current state
         self.__methods = {}
@@ -33,6 +32,11 @@ class Main:
         cache = MethodCache()
         for name, method in MethodRegistry.get_registry().items():
             self.__methods[name] = method(self.__state, self.__logger, self.T, cache)
+
+        self.__ui: UI = self._spawn_interface()
+
+    def __log(self, message: str):
+        self.__ui.log(message)
 
     def _set_interface(self):
         # tmp logger since we don't have an "UI" yet, yeah hacky
@@ -51,15 +55,10 @@ class Main:
         self._set_interface()
         ui = UIRegistry.get_registry().get(self.__state.ui.get().name)
 
-        return ui(self.__state, self.T, self.run_algorithm)
+        return ui(self.__state, self.T, self.__methods)
 
     def main(self):
         self.__ui.start()
-
-    def run_algorithm(self, selected_method_name: str):
-        instance = self.__methods.get(selected_method_name)
-
-        instance.run()
 
 if __name__ == "__main__":
     Main().main()

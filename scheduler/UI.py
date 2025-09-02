@@ -1,17 +1,17 @@
 from abc import abstractmethod, ABC
 import time
-from typing import Callable
 
 from lang.Lang import T
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import UIRegistrator
+from scheduler.methods.BaseMethod import BaseMethod
 
 
 class UI(ABC):
-    def __init__(self, state: ProgramState, t: T, run_algorithm: Callable[[str], None]):
+    def __init__(self, state: ProgramState, t: T, method_instances: dict[str, BaseMethod]):
         self.state = state
         self.T = t
-        self.run_algorithm = run_algorithm
+        self.method_instances = method_instances
 
     @abstractmethod
     def log(self, message):
@@ -57,19 +57,19 @@ class CLI(UI):
     def choices(self, x):
         # TODO - this shouldnt be a literal, but a `class.__name__` or just `class`!
         if x == 1:
-            self.run_algorithm("PittDirectMethod")
+            self.method_instances["PittDirectMethod"].run()
             time.sleep(1)
         elif x == 2:
-            self.run_algorithm("PittPermMethod")
+            self.method_instances["PittPermMethod"].run()
             time.sleep(1)
         elif x == 3:
-            self.run_algorithm("MichiganMethod")
+            self.method_instances["MichiganMethod"].run()
             time.sleep(1)
         elif x == 4:
-            self.run_algorithm("DragonflyMethod")
+            self.method_instances["DragonflyMethod"].run()
             time.sleep(1)
         elif x == 5:
-            self.run_algorithm("FruitflyMethod")
+            self.method_instances["FruitflyMethod"].run()
             time.sleep(1)
         elif x == 6:
             self.state.scheduling.set(
