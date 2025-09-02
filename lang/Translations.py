@@ -48,6 +48,9 @@ class Translations:
                 "How much the entity is drawn away from enemy sources": "Jak bardzo źródła wrogów odpychają osobniki",
                 "Neighbour radius": "Szerokość sąsiedztwa",
 
+                "Step size": "Rozmiar kroku",
+                "Step size in vision phase": "Rozmiar kroku w fazie wizji",
+
                 "Number of tasks exceeds number of machines - machines cannot be without tasks":
                     "Liczba zadań przewyższa liczbę maszyn - maszyny nie mogą być bez zadań",
             }
