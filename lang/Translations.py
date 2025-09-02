@@ -34,6 +34,20 @@ class Translations:
                 "Mutation probability": "Prawdopodobieństwo mutacji",
                 "Gene mutation probability": "Prawdopodobieństwo mutacji genu",
 
+                "Inertia": "Bezwładność",
+                "Movement inertia": "Bezwładność w ruchu",
+                "Separation": "Separacja",
+                "Separation between entities": "Separacja pomiędzy osobnikami",
+                "Alignment": "Wyrównanie",
+                "How closely entity's speed matches that of other entities": "Jak dokładnie prędkość osobnika jest podobna do prędkości reszty osobników",
+                "Cohesion": "Spójność",
+                "How much the entity is drawn to the center of their neighbourhood": "Jak bardzo centrum sąsiedztwa przyciąga osobnika",
+                "Food attraction": "Przyciąganie do jedzenia",
+                "How much the entity is drawn to food sources": "Jak bardzo źródła jedzenia przyciągają osobniki",
+                "Enemy repulsion": "Odpychanie od wrogów",
+                "How much the entity is drawn away from enemy sources": "Jak bardzo źródła wrogów odpychają osobniki",
+                "Neighbour radius": "Szerokość sąsiedztwa",
+
                 "Number of tasks exceeds number of machines - machines cannot be without tasks":
                     "Liczba zadań przewyższa liczbę maszyn - maszyny nie mogą być bez zadań",
             }
