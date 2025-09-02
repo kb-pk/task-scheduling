@@ -89,7 +89,7 @@ class MichiganMethod(EvolAlgoBaseMethod):
         """
         Makes use of existing fitness functions to get fitness function for a single machine
         """
-        faux_map = {m_id: [] for m_id in self.machines}
+        faux_map = {m_id: [] for m_id in range(len(self.machines))}
         faux_map[machine_id] = machine_tasks
 
         return self._fitness(faux_map)
