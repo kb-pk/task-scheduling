@@ -26,9 +26,9 @@ class PittDirectMethod(BasePittMethod):
 
         self.PARAM_DEFS += params
 
-        # defaults (for easier access - therefore hacky)
-        self._crossover_points = params[0].get_value()
-        self._mutation_probability = params[1].get_value()
+        # shorthands
+        self._crossover_points = params[0]
+        self._pm = params[1]
 
         self.name = self.T.t("Pitt (direct)")
         self.description = self.T.td({
@@ -109,7 +109,7 @@ class PittDirectMethod(BasePittMethod):
         random.shuffle(shuffled)
         new_pop: List[List[int]] = []
 
-        for i in range(0, self._pop_size, 2):
+        for i in range(0, self._pop_size.get_value(), 2):
             parents = shuffled[i:i + 2]
             a, b = self.__crossover_pair(parents[0], parents[1])
             new_pop.append(a)
@@ -127,7 +127,7 @@ class PittDirectMethod(BasePittMethod):
 
         n = len(p1)
         while True:
-            points = sorted(random.sample(range(0, n - 1), self._crossover_points))
+            points = sorted(random.sample(range(0, n - 1), self._crossover_points.get_value()))
             child1, child2 = [], []
             prev = 0
             for idx, cp in enumerate(points):
@@ -172,7 +172,7 @@ class PittDirectMethod(BasePittMethod):
 
         for idx, current_m in enumerate(individual):
             # only mutate if the machine has >1 task assigned
-            if np.random.uniform(0.0, 1.0) <= self._mutation_probability and counts[current_m] > 1:
+            if np.random.uniform(0.0, 1.0) <= self._pm.get_value() and counts[current_m] > 1:
                 new_m = self.__mutate_gene(current_m)
                 individual[idx] = new_m
                 counts[current_m] -= 1

@@ -23,7 +23,9 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
         self.PARAM_DEFS += params
 
-        self._mutation_probability = params[0].get_value()
+        self._pop_size.set_value(len(self.machines))
+
+        self._pm = params[0]
 
         self.name = self.T.t("Michigan")
         self.description = self.T.td({
@@ -63,33 +65,19 @@ class MichiganMethod(EvolAlgoBaseMethod):
         # get rid of ndarray
         self.population = [list(t) for t in tasks_to_machines]
 
-        self.__check_population_validity()
-
-    def __check_population_validity(self):
-        # check validity
-        wrongly_assigned_tasks = []
-
-        for m_id, tasks in enumerate(self.population):
-            for t in tasks:
-                if m_id not in self._tasks_possible_machines[t]:
-                    wrongly_assigned_tasks.append(t)
-
-        # redistribute tasks
-        for t in wrongly_assigned_tasks:
-            new_m_id = np.random.choice(self._tasks_possible_machines[t])
-            self.population[new_m_id].append(t)
-
     def __fitness_for_machine(self, machine_id, machine_tasks):
         """
         Makes use of existing fitness functions to get fitness function for a single machine
         """
-        faux_map = {m_id: [] for m_id in self.machines}
+        faux_map = {m_id: [] for m_id in range(len(self.machines))}
         faux_map[machine_id] = machine_tasks
 
         return self._fitness(faux_map)
 
     def __sort_population(self):
-        # najkrotszy czas wykonania albo najmniej zuzytej energii
+        """
+        Returns a population sorted by fitness.
+        """
         fitness_map = [
             self.__fitness_for_machine(m_id, tasks).scheduling() for m_id, tasks in enumerate(self.population)
         ]
@@ -99,52 +87,51 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
         return sorted_pop
 
-        #return sorted(self.population, key=lambda x: self._fitness(self.build_schedule_map(x)).scheduling())
-
     def _crossover_population(self):
-        """
-        Krzyżuje populację parami maszyn (z top i bottom).
-        :return: nowa populacja po krzyżowaniu
-        """
         sorted_pop = self.__sort_population()
 
         top, bottom = self.__split_population(sorted_pop)
-        for t, b in zip(top, bottom):
-            self.__cross_pair(t, b)
+        new_t = top.copy()
+        new_b = bottom.copy()
+        for i, (t, b) in enumerate(zip(top, bottom)):
+            new_t[i], new_b[i] = self.__cross_pair(t, b)
 
-        self.population = top + bottom
+        self.population = new_t + new_b
 
     def __split_population(self, population):
         """
-        Dzieli populację na dwie połowy (top, bottom) i tasuje kolejność w każdej.
+        Divides the population in half and shuffles the resultant halves.
+
+        :return: shuffled top and bottom halves.
         """
         # guaranteed to be even, but whatever
-        mid = self._pop_size // 2
+        mid = self._pop_size.get_value() // 2
 
         top, bottom = population[:mid], population[mid:]
 
         np.random.shuffle(top)
         np.random.shuffle(bottom)
 
-        return top, bottom
+        return list(top), list(bottom)
 
     def __cross_pair(self, first, second):
         """
-        Krzyżuje dwa chromosomy (maszyny) przez wymianę segmentów ogonowych.
-        :param first: tablica (chromosom 1)
-        :param second: tablica (chromosom 2)
+        Performs crossover between first and second.
+
+        :param first: First chromosome.
+        :param second: Second chromosome.
         """
         size_first = len(first)
         size_second = len(second)
         cp1 = randint(1, size_first) if size_first > 1 else 1
         cp2 = randint(1, size_second) if size_second > 1 else 1
-        tmp_first = np.concatenate((first[:cp1], second[cp2:size_second]), axis=0)
-        tmp_second = np.concatenate((second[:cp2], first[cp1:size_first]), axis=0)
-        first = tmp_first
-        second = tmp_second
+        child1 = first[:cp1] + second[cp2:]
+        child2 = second[:cp2] + first[cp1:]
+
+        return child1, child2
 
     def __check_mutation(self):
-        return np.random.uniform(0, 1) <= self._mutation_probability
+        return np.random.uniform(0, 1) <= self._pm.get_value()
 
     def _mutate_population(self):
         """

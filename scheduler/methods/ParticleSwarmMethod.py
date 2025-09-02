@@ -16,7 +16,8 @@ class ParticleSwarmMethod(EvolAlgoBaseMethod):
         return schedule_map
 
     def _generate_population(self):
-        self.population = np.random.uniform(0, len(self.machines) - 1, size=(self._pop_size, len(self.tasks)))
+        self.population = np.random.uniform(0, len(self.machines) - 1,
+                                            size=(self._pop_size.get_value(), len(self.tasks)))
         self._velocity = np.zeros_like(self.population)
 
     def _crossover_population(self):

@@ -1,6 +1,5 @@
 from sys import argv
 
-import scheduler.Common as Common
 from scheduler.MethodCache import MethodCache
 from scheduler.Logger import Logger
 from scheduler.Registry import MethodRegistry

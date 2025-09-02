@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Dict, Callable, List, Type
 
 from enum import Enum
 
-_CASTERS: Dict[str, Callable[[Any], Any]] = {
-    "int": int,
-    "float": float,
-    "bool": lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ("1", "true", "t", "yes", "y", "on")
-}
 
 class ParamValueTypes(Enum):
     """
@@ -26,8 +20,7 @@ class ParamDef:
     _CASTERS: Dict[ParamValueTypes, Callable[[Any], Any]] = {
         ParamValueTypes.INT: int,
         ParamValueTypes.FLOAT: float,
-        ParamValueTypes.BOOLEAN: lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ("1", "true", "t",
-                                                                                                    "yes", "y", "on"),
+        ParamValueTypes.BOOLEAN: bool,
         ParamValueTypes.LIST_SINGLE: lambda v: v if isinstance(v, list) and
                                                     len(v) > 0 and
                                                     isinstance(v[0], ParamDef) else []

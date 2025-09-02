@@ -1,7 +1,14 @@
 from enum import Enum
 
 class ProgramState:
+    """
+    A class encompassing the mutable state of the program
+    """
+
     class __SchedulingState:
+        """
+        Which value the program is currently optimising for - which fitness function it uses
+        """
         class State(Enum):
             makespan = 0
             energy = 1
@@ -18,11 +25,18 @@ class ProgramState:
 
             self.__current_state = self.State(value)
 
-    # after deleting "all" it's the same class...
     class __OutputState(__SchedulingState):
+        """
+        Which value the program presents to the user.
+
+        Useful for seeing how other scheduling values change in time when evolving
+        """
         pass
 
     class __StopCriterionState:
+        """
+        Which stop criterion the program uses to halt the evolution
+        """
         class State(Enum):
             iterations = 0
             fitness_function_value = 1
@@ -40,6 +54,9 @@ class ProgramState:
             self.__current_state = self.State(value)
 
     class __UserInterfaceState:
+        """
+        Which UI the program presents to the user
+        """
         class State(Enum):
             CLI = 0
             GUI = 1
@@ -59,6 +76,9 @@ class ProgramState:
                 raise e
 
     class __LangState:
+        """
+        What language is used to communicate with the user
+        """
         class State(Enum):
             pl_PL = 0
             en_GB = 1
