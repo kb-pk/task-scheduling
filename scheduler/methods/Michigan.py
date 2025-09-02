@@ -80,20 +80,6 @@ class MichiganMethod(EvolAlgoBaseMethod):
             new_m_id = np.random.choice(self._tasks_possible_machines[t])
             self.population[new_m_id].append(t)
 
-    @staticmethod
-    def __last_task_index(chrom):
-        """
-        Zwraca indeks ostatniego rzeczywistego zadania w chromosomie
-        (pozycja przed pierwszym NaN).
-        :param chrom: tablica z ID zadań i NaN
-        :return: indeks (int)
-        """
-        for i, task in enumerate(chrom):
-            if task is None:
-                return i
-
-        return len(chrom)
-
     def __fitness_for_machine(self, machine_id, machine_tasks):
         """
         Makes use of existing fitness functions to get fitness function for a single machine
