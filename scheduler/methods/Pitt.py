@@ -19,11 +19,3 @@ class BasePittMethod(EvolAlgoBaseMethod):
 
     def _generate_population(self):
         self.population = [self._generate_individual() for _ in range(self._pop_size)]
-
-    @abstractmethod
-    def _crossover_population(self):
-        pass
-
-    @abstractmethod
-    def _mutate_population(self):
-        pass
