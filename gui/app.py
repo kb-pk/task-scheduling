@@ -1,43 +1,60 @@
 import tkinter as tk
 from tkinter import ttk
-from typing import Optional
-import sys
-import io
+import tkinter.font as tkfont
+from typing import Dict, Tuple
+import textwrap
 
+from scheduler.Registry import UIRegistrator
 from scheduler.UI import UI
 
-from .method_loader import method_name_map
 from . import tooltip
-from .description_loader import get_description
-from scheduler.Parametrs import get_method_param_defs, get_or_set_method
-from scheduler.methods.BaseMethod import Mode
+# Descriptions now come from each method instance directly
 import scheduler.Common as Common
+from scheduler.ProgramState import ProgramState
+from scheduler.methods.BaseMethod import BaseMethod
+from scheduler.Parameters import ParamDef, ParamValueTypes
 
+# Optional matplotlib embedding for higher-quality plots
+try:
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
+    _HAS_MPL = True
+except Exception:
+    _HAS_MPL = False
 
-# Helper at module scope to update description text safely
+# Helper at module scope to update description text safely from method.get_description()
 def _refresh_description_for(app) -> None:
     try:
-        name = app._algo_var.get()
-        lang = app._desc_lang.get()
-        text = get_description(name, lang) or "(no description)"
-        app._desc_text.configure(state="normal")
-        app._desc_text.delete("1.0", "end")
-        app._desc_text.insert("1.0", text)
-        app._desc_text.configure(state="disabled")
+        display = app._algo_var.get()
+        entry = app._algo_map.get(display)
+        text = ""
+        if entry:
+            _, method = entry
+            try:
+                text = method.get_description() or ""
+            except Exception:
+                text = ""
+        # Normalize whitespace from triple-quoted strings and tabs for clean rendering
+        text = textwrap.dedent((text or "").replace("\t", "    ")).strip() or "(no description)"
+        try:
+            app._desc_label.configure(text=text)
+        except Exception:
+            pass
     except Exception:
         # Silently ignore if being called during teardown/init
         pass
+@UIRegistrator.register_class
+class GUI(tk.Tk, UI):
+    def __init__(self, state: ProgramState, t, method_instances: Dict[str, BaseMethod]) -> None:
+        # Initialize UI base fields expected by scheduler.UI.UI
+        self.state = state
+        self.T = t
+        self.method_instances = method_instances
 
-
-class SchedulerApp(tk.Tk, UI):
-    def __init__(self) -> None:
         super().__init__()
         self.title("Task Scheduling")
-        try:
-            self.state("zoomed")
-        except Exception:
-            sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-            self.geometry(f"{sw}x{sh}+0+0")
+        # Center the window at half of the screen size
+        self.after(0, self._center_initial_window)
 
         # Root layout: left sidebar for parameters, right area for content/plots
         self.columnconfigure(0, weight=0)  # sidebar
@@ -69,6 +86,25 @@ class SchedulerApp(tk.Tk, UI):
         # Build the parameter controls
         self._build_sidebar()
 
+    def _center_initial_window(self) -> None:
+        try:
+            sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+            w = max(800, int(sw * 0.5))
+            h = max(600, int(sh * 0.5))
+            x = max(0, (sw - w) // 2)
+            y = max(0, (sh - h) // 2)
+            self.geometry(f"{w}x{h}+{x}+{y}")
+        except Exception:
+            pass
+
+    # UI interface hooks
+    def log(self, message):
+        self._append_diag(f"{message}\n")
+
+    def start(self):
+        # Start the app
+        self.mainloop()
+
     def _build_sidebar(self) -> None:
         # Section: Algorithm selection
         section = ttk.LabelFrame(self.sidebar, text="Parameters")
@@ -78,7 +114,15 @@ class SchedulerApp(tk.Tk, UI):
         ttk.Label(section, text="Algorithm:").grid(row=0, column=0, sticky="w", padx=(10, 6), pady=(10, 6))
 
         self._algo_var = tk.StringVar()
-        self._algo_map = method_name_map()  # {display: module_qualname}
+        # Build display map from provided method instances
+        # Map display name -> (registry_key, method_instance)
+        self._algo_map: Dict[str, Tuple[str, BaseMethod]] = {}
+        for key, inst in (self.method_instances or {}).items():
+            display = inst.get_name() or key
+            # Ensure unique display names by appending key if duplicated
+            if display in self._algo_map:
+                display = f"{display} ({key})"
+            self._algo_map[display] = (key, inst)
 
         values = list(self._algo_map.keys()) if self._algo_map else ["<no methods found>"]
         self._algo_combo = ttk.Combobox(section, textvariable=self._algo_var, state="readonly", values=values)
@@ -90,7 +134,9 @@ class SchedulerApp(tk.Tk, UI):
 
         # Optimization objective
         ttk.Label(section, text="Objective:").grid(row=1, column=0, sticky="w", padx=(10, 6))
-        self._objective_var = tk.StringVar(value="MAKESPAN")
+        # Initialize from ProgramState
+        current_obj = self.state.scheduling.get().name.upper() if self.state else "MAKESPAN"
+        self._objective_var = tk.StringVar(value=current_obj)
         self._rb_ms = ttk.Radiobutton(
             section,
             text="Makespan",
@@ -114,29 +160,43 @@ class SchedulerApp(tk.Tk, UI):
         self._params_area.grid(row=2, column=0, columnspan=2, sticky="new", padx=(10, 10), pady=(6, 10))
         self._param_controls = {}
 
-        # Description header with language toggle
-        hdr = ttk.Frame(section)
-        hdr.grid(row=3, column=0, columnspan=2, sticky="ew", padx=(10, 10))
-        ttk.Label(hdr, text="Description:").grid(row=0, column=0, sticky="w")
-        self._desc_lang = tk.StringVar(value="en")
-        # Use a lambda to defer attribute lookup until click-time
-        self._desc_toggle = ttk.Button(hdr, text="EN", width=6, command=lambda: self._toggle_desc_lang())
-        self._desc_toggle.grid(row=0, column=1, sticky="e")
-        hdr.columnconfigure(0, weight=1)
+        # Description block as its own section under Parameters
+        self._desc_section = ttk.LabelFrame(self.sidebar, text="Description")
+        self._desc_section.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        # Plain text label with word wrap; wraplength bound to section width
+        self._desc_label = ttk.Label(self._desc_section, text="", justify="left", anchor="nw")
+        # Set a readable default font (TkDefaultFont)
+        try:
+            self._desc_label.configure(font=tkfont.nametofont("TkDefaultFont"))
+        except Exception:
+            pass
+        self._desc_label.grid(row=0, column=0, sticky="ew", padx=(10, 10), pady=(6, 10))
+        self._desc_section.columnconfigure(0, weight=1)
+        try:
+            self._desc_section.grid_propagate(True)
+        except Exception:
+            pass
+        # Keep label wraplength in sync with available width
+        def _resize_wrap(_event=None):
+            try:
+                w = max(100, self._desc_section.winfo_width() - 20)
+                self._desc_label.configure(wraplength=w)
+            except Exception:
+                pass
+        self._desc_section.bind("<Configure>", _resize_wrap)
+        self.after(0, _resize_wrap)
 
-        # Description text area with scrollbar
-        self._desc_text = tk.Text(section, wrap="word", height=10, state="disabled")
-        self._desc_text.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=(10, 10), pady=(4, 10))
-
-        # Allow the description area to grow within the section
-        section.rowconfigure(4, weight=1)
-
-        # Bottom action bar with Start button (fixed row at bottom)
-        actions = ttk.Frame(section)
-        actions.grid(row=5, column=0, columnspan=2, sticky="ew", padx=(10, 10), pady=(0, 6))
+        # Bottom action bar with Start button placed below description
+        actions = ttk.Frame(self.sidebar)
+        actions.grid(row=2, column=0, sticky="ew", padx=(10, 10), pady=(8, 6))
         self._start_btn = ttk.Button(actions, text="Start", command=self._on_start_clicked)
         self._start_btn.pack(side="left")
-        section.rowconfigure(5, weight=0)
+        # Sidebar growth rules
+        # Do not expand description vertically; keep natural height
+        try:
+            self.sidebar.rowconfigure(1, weight=0)
+        except Exception:
+            pass
 
         # Main notebook with tabs: Gantt, Linear, Diagnostics
         self._main_nb = ttk.Notebook(self.main_area)
@@ -151,8 +211,9 @@ class SchedulerApp(tk.Tk, UI):
         self._gantt_makespan = ttk.Frame(self._nb_gantt)
         self._nb_gantt.add(self._gantt_energy, text="Energy")
         self._nb_gantt.add(self._gantt_makespan, text="Makespan")
-        ttk.Label(self._gantt_energy, text="Energy Gantt plot area").pack(padx=10, pady=10)
-        ttk.Label(self._gantt_makespan, text="Makespan Gantt plot area").pack(padx=10, pady=10)
+        if not _HAS_MPL:
+            ttk.Label(self._gantt_energy, text="Matplotlib not installed").pack(padx=10, pady=10)
+            ttk.Label(self._gantt_makespan, text="Matplotlib not installed").pack(padx=10, pady=10)
 
         # Linear tab with nested Energy/Makespan tabs
         self._tab_linear = ttk.Frame(self._main_nb)
@@ -163,10 +224,9 @@ class SchedulerApp(tk.Tk, UI):
         self._linear_makespan = ttk.Frame(self._nb_linear)
         self._nb_linear.add(self._linear_energy, text="Energy")
         self._nb_linear.add(self._linear_makespan, text="Makespan")
-        ttk.Label(self._linear_energy, text="Energy linear plot area").pack(padx=10, pady=10)
-        ttk.Label(self._linear_makespan, text="Makespan linear plot area").pack(padx=10, pady=10)
+        # Linear plots rendered after run
 
-        # Diagnostics tab - will capture stdout/stderr (redirect enabled after init)
+        # Diagnostics tab
         self._tab_diag = ttk.Frame(self._main_nb)
         self._main_nb.add(self._tab_diag, text="Diagnostics")
         self._diag_text = tk.Text(self._tab_diag, wrap="word", state="disabled")
@@ -175,11 +235,8 @@ class SchedulerApp(tk.Tk, UI):
         self._diag_text.pack(side="left", fill="both", expand=True)
         _scroll.pack(side="right", fill="y")
 
-        # Prepare diagnostics redirection but enable it after UI is ready
-        self._orig_stdout = sys.stdout
-        self._orig_stderr = sys.stderr
+        # Configure tags and close handler
         self._diag_text.tag_configure("err", foreground="#aa0000")
-        # Restore streams on close
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # Initialize defaults
@@ -188,18 +245,22 @@ class SchedulerApp(tk.Tk, UI):
             self._on_algo_changed()
         except Exception:
             import traceback
-            traceback.print_exc(file=self._orig_stderr)
+            self._append_diag(traceback.format_exc(), tag="err")
             raise
-        # Enable console redirection once UI and mainloop are ready
-        self.after(0, self._enable_diagnostics_redirect)
 
     def _on_objective_changed(self) -> None:
-        # Save both string selection and update Common.scheduling_mode (0/1)
-        val = self._objective_var.get()
-        if val == "ENERGY":
-            Common.scheduling_mode = Common.ENERGY_MODE
-        else:
-            Common.scheduling_mode = Common.MAKESPAN_MODE
+        # Update ProgramState and keep Common in sync for legacy helpers
+        val = self._objective_var.get().upper()
+        try:
+            if val == "ENERGY":
+                self.state.scheduling.set(self.state.scheduling.State.energy)
+                Common.scheduling_mode = Common.ENERGY_MODE
+            else:
+                self.state.scheduling.set(self.state.scheduling.State.makespan)
+                Common.scheduling_mode = Common.MAKESPAN_MODE
+        except Exception:
+            # If state not available, best-effort Common fallback
+            Common.scheduling_mode = Common.ENERGY_MODE if val == "ENERGY" else Common.MAKESPAN_MODE
 
     def get_objective(self) -> str:
         """Return selected objective as 'ENERGY' or 'MAKESPAN'."""
@@ -213,87 +274,142 @@ class SchedulerApp(tk.Tk, UI):
         self._param_controls.clear()
 
         display = self._algo_var.get()
-        method_cls = self._algo_map.get(display)
-        if not method_cls:
+        entry = self._algo_map.get(display)
+        if not entry:
             return
+        _, method = entry
 
-        param_defs = get_method_param_defs(method_cls)  # list[ParamDef]
-        # Build rows: label + input per param
-        for r, spec in enumerate(param_defs):
-            ttk.Label(self._params_area, text=f"{spec.name}:").grid(row=r, column=0, sticky="w", padx=(0, 6), pady=3)
+        # Retrieve live ParamDef list from the instance
+        param_defs = method.get_parameters()
+        row = 0
+        # Track LIST_SINGLE groups for selection handling
+        self._list_single_groups = []
+        for spec in param_defs:
+            ptype = spec.get_ptype()
+            # Simple types
+            if ptype in (ParamValueTypes.INT, ParamValueTypes.FLOAT, ParamValueTypes.BOOLEAN):
+                ttk.Label(self._params_area, text=f"{spec.get_name()}:").grid(row=row, column=0, sticky="w", padx=(0, 6), pady=3)
+                if ptype == ParamValueTypes.BOOLEAN:
+                    var = tk.StringVar(value="true" if bool(spec.get_value()) else "false")
+                    frame = ttk.Frame(self._params_area)
+                    rb_true = ttk.Radiobutton(frame, text="True", value="true", variable=var)
+                    rb_false = ttk.Radiobutton(frame, text="False", value="false", variable=var)
+                    rb_true.pack(side="left", padx=(0, 6))
+                    rb_false.pack(side="left")
+                    widget = frame
+                else:
+                    var = tk.StringVar(value=str(spec.get_value()))
+                    widget = ttk.Entry(self._params_area, textvariable=var, width=14)
+                widget.grid(row=row, column=1, sticky="ew", pady=3)
 
-            # Choose widget based on type
-            if spec.ptype == "bool":
-                var = tk.BooleanVar(value=bool(spec.default))
-                widget = ttk.Checkbutton(self._params_area, variable=var)
-            else:
-                # int/float as Entry; value kept as string
-                var = tk.StringVar(value=str(spec.default))
-                widget = ttk.Entry(self._params_area, textvariable=var, width=14)
-            widget.grid(row=r, column=1, sticky="ew", pady=3)
+                desc = spec.get_description() or ""
+                bounds = []
+                if spec.get_min_value() is not None:
+                    bounds.append(f"min={spec.get_min_value()}")
+                if spec.get_max_value() is not None:
+                    bounds.append(f"max={spec.get_max_value()}")
+                tip_text = desc
+                if bounds:
+                    tip_text = f"{desc} (" + ", ".join(bounds) + ")"
+                tooltip.attach(widget, tip_text)
 
-            # Tooltip with description and bounds
-            desc = spec.description or ""
-            bounds = []
-            if spec.min_value is not None:
-                bounds.append(f"min={spec.min_value}")
-            if spec.max_value is not None:
-                bounds.append(f"max={spec.max_value}")
-            tip_text = desc
-            if bounds:
-                tip_text = f"{desc} (" + ", ".join(bounds) + ")"
-            tooltip.attach(widget, tip_text)
+                self._param_controls[spec.get_name()] = {"var": var, "widget": widget, "spec": spec}
+                row += 1
+            elif ptype == ParamValueTypes.LIST_SINGLE:
+                # Group label
+                ttk.Label(self._params_area, text=f"{spec.get_name()}:").grid(row=row, column=0, sticky="w", padx=(0, 6), pady=3)
+                row += 1
+                sub_params = spec.get_value()  # list[ParamDef]
+                group_var = tk.IntVar()
+                # Initialize selection: if this is the only LIST_SINGLE, align with ProgramState stop_criterion
+                try:
+                    # crude default to current state index
+                    group_var.set(self.state.stop_criterion.get().value)
+                except Exception:
+                    group_var.set(0)
 
-            self._param_controls[spec.name] = {"var": var, "widget": widget, "spec": spec}
+                # Render each sub-parameter with a radio to select it
+                sub_widgets = []
+                for idx, sub in enumerate(sub_params):
+                    rb = ttk.Radiobutton(self._params_area, value=idx, variable=group_var, text=sub.get_name())
+                    rb.grid(row=row, column=0, sticky="w", padx=(20, 6))
+
+                    if sub.get_ptype() == ParamValueTypes.BOOLEAN:
+                        svar = tk.StringVar(value="true" if bool(sub.get_value()) else "false")
+                        frame = ttk.Frame(self._params_area)
+                        sw_true = ttk.Radiobutton(frame, text="True", value="true", variable=svar)
+                        sw_false = ttk.Radiobutton(frame, text="False", value="false", variable=svar)
+                        sw_true.pack(side="left", padx=(0, 6))
+                        sw_false.pack(side="left")
+                        sw = frame
+                    else:
+                        svar = tk.StringVar(value=str(sub.get_value()))
+                        sw = ttk.Entry(self._params_area, textvariable=svar, width=14)
+                    sw.grid(row=row, column=1, sticky="ew", pady=3)
+
+                    # Tooltip
+                    desc = sub.get_description() or ""
+                    bounds = []
+                    if sub.get_min_value() is not None:
+                        bounds.append(f"min={sub.get_min_value()}")
+                    if sub.get_max_value() is not None:
+                        bounds.append(f"max={sub.get_max_value()}")
+                    tip_text = desc
+                    if bounds:
+                        tip_text = f"{desc} (" + ", ".join(bounds) + ")"
+                    tooltip.attach(sw, tip_text)
+
+                    self._param_controls[f"{spec.get_name()}::{sub.get_name()}"] = {"var": svar, "widget": sw, "spec": sub}
+                    sub_widgets.append(sw)
+                    row += 1
+
+                # Enable only selected sub-widget
+                def _apply_group_state(*_args):
+                    sel = group_var.get()
+                    for idx, w in enumerate(sub_widgets):
+                        try:
+                            state = "normal" if idx == sel else "disabled"
+                            # Frame containing radios vs Entry
+                            if isinstance(w, ttk.Frame):
+                                for child in w.winfo_children():
+                                    child.configure(state=state)
+                            else:
+                                w.configure(state=state)
+                        except Exception:
+                            pass
+                group_var.trace_add("write", lambda *_: _apply_group_state())
+                _apply_group_state()
+
+                # Keep for later to update ProgramState on Start
+                self._list_single_groups.append({"spec": spec, "var": group_var, "widgets": sub_widgets})
 
         self._params_area.columnconfigure(1, weight=1)
         # Refresh description when algorithm changes
         _refresh_description_for(self)
 
-    def get_parameters(self) -> list:
-        """Return current parameter values in the order defined by PARAM_DEFS."""
-        display = self._algo_var.get()
-        method_cls = self._algo_map.get(display)
-        if not method_cls:
-            return []
-        order = get_method_param_defs(method_cls)
-        values = []
-        for spec in order:
-            ctrl = self._param_controls.get(spec.name)
-            if not ctrl:
-                values.append(spec.default)
-                continue
+    def _apply_parameters_to_method(self, method: BaseMethod) -> None:
+        """Read widgets and set values on the method's ParamDef instances."""
+        for key, ctrl in self._param_controls.items():
+            spec: ParamDef = ctrl["spec"]
             var = ctrl["var"]
-            v = var.get()
-            values.append(v)
-        return values
+            val = var.get()
+            try:
+                spec.set_value(val)
+            except Exception as e:
+                self._append_diag(f"[WARN] Invalid value for '{key}': {e}\n", tag="err")
 
+        # If method uses a LIST_SINGLE group (e.g., stop criterion), update state to chosen index
+        try:
+            if hasattr(self, "_list_single_groups") and self._list_single_groups:
+                # For now assume single relevant group controls global stop_criterion
+                sel = self._list_single_groups[0]["var"].get()
+                self.state.stop_criterion.set(sel)
+        except Exception:
+            pass
     
 
     def _on_close(self) -> None:
-        # Restore std streams then destroy window
-        try:
-            sys.stdout = self._orig_stdout
-            sys.stderr = self._orig_stderr
-        except Exception:
-            pass
         self.destroy()
-
-    def _enable_diagnostics_redirect(self) -> None:
-        try:
-            sys.stdout = _TextRedirect(self._diag_text)
-            sys.stderr = _TextRedirect(self._diag_text, tag="err")
-        except Exception:
-            # If widget is gone, keep originals
-            pass
-
-    # --- Description language toggle ---
-    def _toggle_desc_lang(self) -> None:
-        cur = self._desc_lang.get().lower()
-        nxt = "pl" if cur == "en" else "en"
-        self._desc_lang.set(nxt)
-        self._desc_toggle.configure(text=nxt.upper())
-        _refresh_description_for(self)
 
     # --- Actions ---
     def _on_start_clicked(self) -> None:
@@ -304,64 +420,329 @@ class SchedulerApp(tk.Tk, UI):
             pass
 
         display = self._algo_var.get()
-        method_cls = self._algo_map.get(display)
-        if not method_cls:
-            print("[ERROR] No algorithm selected.")
+        entry = self._algo_map.get(display)
+        if not entry:
+            self.log("[ERROR] No algorithm selected.")
             return
 
         # Gather parameter values and run
-        values = self.get_parameters()
         obj = self.get_objective()
-        print(f"\n>>> Starting '{display}' with objective={obj} and params={values}")
+        self.log(f"\n>>> Starting '{display}' with objective={obj}")
         try:
             Common.prepare_results_directory()
         except Exception as e:
-            print(f"[WARN] Could not prepare results directory: {e}")
+            self.log(f"[WARN] Could not prepare results directory: {e}")
 
         try:
-            method = get_or_set_method(method_cls, values)
+            _, method = entry
+            self._apply_parameters_to_method(method)
             method.run()
-            method.print_schedule()
-        except Exception as e:
+            # Render linear plots in tabs
+            self._render_plots(method)
+        except Exception:
             import traceback
-            print("[ERROR] Run failed:")
-            traceback.print_exc()
+            self.log("[ERROR] Run failed:")
+            self._append_diag(trackbar_format := traceback.format_exc(), tag="err")
 
 
-class _TextRedirect(io.TextIOBase):
-    def __init__(self, text: tk.Text, tag: str | None = None):
-        super().__init__()
-        self.text = text
-        self.tag = tag
-
-    def writable(self) -> bool:
-        return True
-
-    def write(self, s: str) -> int:
+    # --- Diagnostics logging ---
+    def _append_diag(self, s: str, tag: str | None = None) -> None:
         if not s:
-            return 0
-        # Ensure UI update happens on main thread
+            return
         def append():
             try:
-                self.text.configure(state="normal")
-                if self.tag:
-                    self.text.insert("end", s, (self.tag,))
+                self._diag_text.configure(state="normal")
+                if tag:
+                    self._diag_text.insert("end", s, (tag,))
                 else:
-                    self.text.insert("end", s)
-                self.text.see("end")
+                    self._diag_text.insert("end", s)
+                self._diag_text.see("end")
             finally:
-                self.text.configure(state="disabled")
-
+                self._diag_text.configure(state="disabled")
         try:
-            self.text.after(0, append)
+            self._diag_text.after(0, append)
         except Exception:
-            # Fallback if widget destroyed
             pass
-        return len(s)
+
+    # --- Plot rendering ---
+    def _render_plots(self, method: BaseMethod) -> None:
+        try:
+            history = getattr(method, 'get_history', None)
+            if callable(history):
+                hist = history() or {}
+                ys_mk = list(hist.get('makespan', []))
+                ys_en = list(hist.get('energy', []))
+            else:
+                ys_mk = []
+                ys_en = []
+
+            # Clear containers
+            self._clear_children(self._linear_energy)
+            self._clear_children(self._linear_makespan)
+            self._clear_children(self._gantt_energy)
+            self._clear_children(self._gantt_makespan)
+
+            if _HAS_MPL:
+                self._draw_mpl_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
+                self._draw_mpl_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
+                # Gantt with matplotlib
+                self._draw_mpl_gantt_makespan(self._gantt_makespan, method)
+                self._draw_mpl_gantt_energy(self._gantt_energy, method)
+            else:
+                self._draw_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
+                self._draw_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
+        except Exception:
+            import traceback
+            self._append_diag(traceback.format_exc(), tag="err")
+
+    def _clear_children(self, container) -> None:
+        try:
+            for child in container.winfo_children():
+                child.destroy()
+        except Exception:
+            pass
+
+    def _draw_line(self, frame, ys, title: str = "Value over Epochs", y_label: str = "Value") -> None:
+        self.update_idletasks()
+        width = max(600, frame.winfo_width() or 600)
+        height = 260
+        pad_l, pad_r, pad_t, pad_b = 50, 20, 24, 40
+        c = tk.Canvas(frame, width=width, height=height, highlightthickness=0)
+        c.pack(fill="both", expand=True)
+        c.create_text(pad_l, 6, text=title, anchor="nw")
+        if not ys:
+            c.create_text(width/2, height/2, text="No data", fill="#666")
+            return
+        n = len(ys)
+        xs = list(range(n))
+        min_y = min(ys)
+        max_y = max(ys)
+        if max_y == min_y:
+            max_y = min_y + 1.0
+        plot_w = width - pad_l - pad_r
+        plot_h = height - pad_t - pad_b
+        # Axes
+        c.create_line(pad_l, pad_t, pad_l, pad_t + plot_h, fill="#333")
+        c.create_line(pad_l, pad_t + plot_h, pad_l + plot_w, pad_t + plot_h, fill="#333")
+        # Y ticks (5)
+        for i in range(6):
+            yv = min_y + (max_y - min_y) * i / 5
+            y = pad_t + plot_h - (plot_h * i / 5)
+            c.create_line(pad_l - 4, y, pad_l, y, fill="#333")
+            c.create_text(pad_l - 8, y, text=f"{yv:.2f}", anchor="e", fill="#333")
+        # X ticks (up to 10)
+        step = max(1, n // 10)
+        for i in range(0, n, step):
+            x = pad_l + plot_w * (i / max(1, n - 1))
+            c.create_line(x, pad_t + plot_h, x, pad_t + plot_h + 4, fill="#333")
+            c.create_text(x, pad_t + plot_h + 14, text=str(i), anchor="n", fill="#333")
+        # Polyline
+        pts = []
+        for i, yv in enumerate(ys):
+            x = pad_l + plot_w * (i / max(1, n - 1))
+            y = pad_t + plot_h - ((yv - min_y) / (max_y - min_y)) * plot_h
+            pts.extend([x, y])
+        c.create_line(*pts, fill="#1f77b4", width=2)
+        # Points
+        for i in range(n):
+            x = pad_l + plot_w * (i / max(1, n - 1))
+            y = pad_t + plot_h - ((ys[i] - min_y) / (max_y - min_y)) * plot_h
+            c.create_oval(x-2, y-2, x+2, y+2, fill="#1f77b4", outline="")
+
+    def _draw_mpl_line(self, frame, ys, title: str = "Value over Epochs", y_label: str = "Value") -> None:
+        if not ys:
+            lbl = ttk.Label(frame, text="No data", foreground="#666")
+            lbl.pack()
+            return
+        fig = Figure(figsize=(6, 3), dpi=100)
+        ax = fig.add_subplot(111)
+        xs = list(range(len(ys)))
+        ax.plot(xs, ys, marker='o', markersize=2, linewidth=1.2)
+        ax.set_title(title)
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel(y_label)
+        ax.grid(True, alpha=0.3)
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        widget = canvas.get_tk_widget()
+        widget.pack(fill="both", expand=True)
+
+        def _on_resize(event=None):
+            try:
+                w = max(200, frame.winfo_width())
+                h = max(150, frame.winfo_height())
+                dpi = fig.get_dpi()
+                fig.set_size_inches(w / dpi, h / dpi)
+                canvas.draw_idle()
+            except Exception:
+                pass
+        # Bind after packing so sizes are available
+        frame.bind("<Configure>", lambda e: _on_resize(e))
+        _on_resize()
+
+    def _draw_mpl_gantt_makespan(self, frame, method: BaseMethod) -> None:
+        try:
+            schedule = method.get_best_solution()
+            if not schedule:
+                ttk.Label(frame, text="No schedule to plot").pack()
+                return
+            etc = getattr(method, 'etc', None)
+            if etc is None:
+                ttk.Label(frame, text="Missing ETC data").pack()
+                return
+            # Compute per-machine cumulative durations for makespan
+            loads = []
+            for m_id, tasks in sorted(schedule.items()):
+                total = 0.0
+                for t in tasks:
+                    total += float(etc[t][m_id])
+                loads.append(total)
+            makespan = max(loads) if loads else 0.0
+            # Create figure
+            fig = Figure(figsize=(6, 3), dpi=100)
+            ax = fig.add_subplot(111)
+            # Colors based on number of tasks
+            try:
+                import numpy as np
+                from matplotlib import cm
+                num_tasks = len(etc)
+                colors = cm.viridis(np.linspace(0, 1, num_tasks))
+            except Exception:
+                colors = None
+
+            for machine_id in sorted(schedule.keys()):
+                current_time = 0.0
+                for task_id in schedule[machine_id]:
+                    duration = float(etc[task_id][machine_id])
+                    color = None
+                    if colors is not None:
+                        color = colors[int(task_id) % len(colors)]
+                    ax.barh(machine_id, duration, left=current_time, height=0.6, align='center',
+                            color=color, edgecolor='black')
+                    current_time += duration
+
+            ax.set_yticks(sorted(schedule.keys()))
+            ax.set_yticklabels([f"Machine {m}" for m in sorted(schedule.keys())])
+            ax.invert_yaxis()
+            ax.set_xlabel('Time')
+            name = getattr(method, 'get_name', lambda: 'Method')()
+            ax.set_title(f'Schedule (Gantt) - {name}')
+            ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
+            if makespan:
+                ax.axvline(makespan, color='red', linestyle='--', linewidth=1.2)
+                ax.text(makespan, 0.5, f'Makespan: {makespan:.2f}', rotation=90, va='bottom', ha='left',
+                        color='red', fontsize=9, backgroundcolor='white')
+
+            canvas = FigureCanvasTkAgg(fig, master=frame)
+            widget = canvas.get_tk_widget()
+            widget.pack(fill="both", expand=True)
+            def _on_resize(event=None):
+                try:
+                    w = max(200, frame.winfo_width())
+                    h = max(150, frame.winfo_height())
+                    dpi = fig.get_dpi()
+                    fig.set_size_inches(w / dpi, h / dpi)
+                    canvas.draw_idle()
+                except Exception:
+                    pass
+            frame.bind("<Configure>", lambda e: _on_resize(e))
+            _on_resize()
+        except Exception:
+            import traceback
+            self._append_diag(traceback.format_exc(), tag="err")
+
+    def _draw_mpl_gantt_energy(self, frame, method: BaseMethod) -> None:
+        try:
+            schedule = method.get_best_solution()
+            if not schedule:
+                ttk.Label(frame, text="No schedule to plot").pack()
+                return
+            etc = getattr(method, 'etc', None)
+            machines = getattr(method, 'machines', None)
+            if etc is None or machines is None:
+                ttk.Label(frame, text="Missing data for energy plot").pack()
+                return
+            # Compute per-machine busy energy
+            busy_energies = []
+            for m_id, tasks in sorted(schedule.items()):
+                busy_e = 0.0
+                for task_id in tasks:
+                    duration = float(etc[task_id][m_id])
+                    busy_e += duration * float(machines.loc[m_id, 'P_busy'])
+                busy_energies.append(busy_e)
+            max_busy_energy = max(busy_energies) if busy_energies else 0.0
+
+            fig = Figure(figsize=(6, 3), dpi=100)
+            ax = fig.add_subplot(111)
+            try:
+                import numpy as np
+                from matplotlib import cm
+                num_tasks = len(etc)
+                colors = cm.viridis(np.linspace(0, 1, num_tasks))
+            except Exception:
+                colors = None
+
+            for machine_id in sorted(schedule.keys()):
+                current_energy = 0.0
+                for task_id in schedule[machine_id]:
+                    duration = float(etc[task_id][machine_id])
+                    energy = duration * float(machines.loc[machine_id, 'P_busy'])
+                    color = None
+                    if colors is not None:
+                        color = colors[int(task_id) % len(colors)]
+                    ax.barh(machine_id, energy, left=current_energy, height=0.6, align='center',
+                            color=color, edgecolor='black')
+                    current_energy += energy
+
+            ax.set_yticks(sorted(schedule.keys()))
+            ax.set_yticklabels([f"Machine {m}" for m in sorted(schedule.keys())])
+            ax.invert_yaxis()
+            ax.set_xlabel('Energy')
+            name = getattr(method, 'get_name', lambda: 'Method')()
+            ax.set_title(f'Schedule (Energy Gantt) - {name}')
+            ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
+            if max_busy_energy:
+                ax.axvline(max_busy_energy, color='red', linestyle='--', linewidth=1.2)
+                ax.text(max_busy_energy, 0.5, f'Max busy energy: {max_busy_energy:.2f}', rotation=90, va='bottom', ha='left',
+                        color='red', fontsize=9, backgroundcolor='white')
+
+            canvas = FigureCanvasTkAgg(fig, master=frame)
+            widget = canvas.get_tk_widget()
+            widget.pack(fill="both", expand=True)
+            def _on_resize(event=None):
+                try:
+                    w = max(200, frame.winfo_width())
+                    h = max(150, frame.winfo_height())
+                    dpi = fig.get_dpi()
+                    fig.set_size_inches(w / dpi, h / dpi)
+                    canvas.draw_idle()
+                except Exception:
+                    pass
+            frame.bind("<Configure>", lambda e: _on_resize(e))
+            _on_resize()
+        except Exception:
+            import traceback
+            self._append_diag(traceback.format_exc(), tag="err")
 
 
 def run() -> None:
-    app = SchedulerApp()
+    # Development convenience: basic self-host without Main
+    from scheduler.MethodCache import MethodCache
+    from scheduler.Logger import Logger
+    from scheduler.Registry import MethodRegistry
+    from lang.Lang import T
+    from scheduler.ProgramState import ProgramState
+
+    state = ProgramState()
+    t = T(state)
+    logger = Logger(state, print)
+    cache = MethodCache()
+    methods: Dict[str, BaseMethod] = {}
+    for name, cls in MethodRegistry.get_registry().items():
+        try:
+            methods[name] = cls(state, logger, t, cache)
+        except Exception:
+            continue
+    app = GUI(state, t, methods)
     app.mainloop()
 
 

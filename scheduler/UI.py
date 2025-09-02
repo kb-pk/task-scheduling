@@ -89,14 +89,3 @@ class CLI(UI):
             print('Wrong choice')
             time.sleep(1)
 
-
-@UIRegistrator.register_class
-class GUI(UI):
-    def _print_to_diagnostic(self, message):
-        pass
-
-    def log(self, message):
-        self._print_to_diagnostic(message)
-
-    def start(self):
-        pass

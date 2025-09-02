@@ -16,6 +16,10 @@ class EvolAlgoBaseMethod(BaseMethod):
         self.population = []
         self._tasks_possible_machines = None
 
+        # Track best metrics history across epochs for plotting
+        self._history_makespan: list[float] = []
+        self._history_energy: list[float] = []
+
         self.PARAM_DEFS = [
             ParamDef(self.T.t("Population size"), ParamValueTypes.INT, 10, self.T.t("Population size (must be even)"),
                      min_value=2,
@@ -50,12 +54,16 @@ class EvolAlgoBaseMethod(BaseMethod):
 
         self._generate_population()
         self._evaluate_population_initial()
+        # Record initial best metrics for epoch 0
+        self._record_history_point()
 
     def optimize(self):
         while not self.stop():
             self._crossover_population()
             self._mutate_population()
             self._evaluate_population_update_best()
+            # Record current best after this epoch
+            self._record_history_point()
             self._epoch += 1
 
     def stop(self):
@@ -99,6 +107,26 @@ class EvolAlgoBaseMethod(BaseMethod):
         has_improved = last_best != self.best_score
         if has_improved:
             self.logger.better_solution_found(self.best_score.output(), self._epoch)
+
+    # Append current best metrics to history lists (for plotting).
+    def _record_history_point(self):
+        if self.best_score is None:
+            return
+        metrics = self.best_score.get_all()
+        try:
+            mk = float(metrics[self.state.scheduling.State.makespan])
+            en = float(metrics[self.state.scheduling.State.energy])
+        except Exception:
+            return
+        self._history_makespan.append(mk)
+        self._history_energy.append(en)
+
+    # Return {'makespan': [...], 'energy': [...]} history per epoch.
+    def get_history(self) -> dict[str, list[float]]:
+        return {
+            'makespan': list(self._history_makespan),
+            'energy': list(self._history_energy),
+        }
 
     def _map_possible_machines_to_tasks(self):
         """
