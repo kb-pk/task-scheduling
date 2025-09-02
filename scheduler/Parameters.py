@@ -48,7 +48,7 @@ class ParamDef2:
         self._value = default
 
     def _cast(self, value):
-        return self._CASTERS[self.ptype](value)
+        return self._CASTERS[self._ptype](value)
 
     def get_name(self):
         return self._name
