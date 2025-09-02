@@ -53,7 +53,7 @@ class EvolAlgoBaseMethod(BaseMethod):
             f = self._fitness(decode)
 
             if self.best_individual is None or f.scheduling() < self.best_score.scheduling():
-                self.best_individual = decode
+                self.best_individual = individual
                 self.best_score = f
 
     def _evaluate_population_initial(self):
