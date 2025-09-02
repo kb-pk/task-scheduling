@@ -43,12 +43,12 @@ class CLI(UI):
             ]
 
             for choice in prompt:
-                print(choice)
+                self.log(choice)
 
             try:
                 user_choice = int(input())
             except ValueError:
-                print(self.T.t("Invalid choice"))
+                self.log(self.T.t("Invalid choice"))
                 time.sleep(1)
                 continue
 
@@ -85,7 +85,7 @@ class CLI(UI):
         elif x == 9:
             exit()
         else:
-            print('Wrong choice')
+            self.log('Wrong choice')
             time.sleep(1)
 
 
