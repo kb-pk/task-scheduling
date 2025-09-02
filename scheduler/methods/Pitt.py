@@ -15,7 +15,7 @@ class BasePittMethod(EvolAlgoBaseMethod):
         self._tasks_possible_machines = []
 
         params = [
-            ParamDef(self.T.t("Enable security features"), ParamValueTypes.BOOLEAN, bool(self.state.security_features.get().value),
+            ParamDef(self.T.t("Enable security features"), ParamValueTypes.BOOLEAN, False,
                      self.T.t("Enable security features (prevents some machines from running some tasks)")),
         ]
 
