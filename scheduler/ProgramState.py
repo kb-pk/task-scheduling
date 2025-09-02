@@ -59,7 +59,7 @@ class ProgramState:
             OFF = 1
 
         def __init__(self):
-            self.__current_state = self.State.ON
+            self.__current_state = self.State.OFF
 
         def get(self):
             return self.__current_state
