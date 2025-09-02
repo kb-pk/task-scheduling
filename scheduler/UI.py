@@ -39,7 +39,8 @@ class CLI(UI):
                 "6. " + self.T.t("Switch scheduling mode (current mode: ") + self.state.scheduling.get().name + ")",
                 "7. " + self.T.t("Switch output mode (current mode: ") + self.state.output.get().name + ")",
                 "8. " + self.T.t("Switch stop criterion (current mode: " + self.state.stop_criterion.get().name + ")"),
-                "9. " + self.T.t("Exit program")
+                "9. " + self.T.t("Enable security features (current mode: " + self.state.security_features.get().name + ")"),
+                "10. " + self.T.t("Exit program")
             ]
 
             for choice in prompt:
@@ -84,6 +85,10 @@ class CLI(UI):
                 (self.state.stop_criterion.get().value + 1) % len(self.state.stop_criterion.State)
             )
         elif x == 9:
+            self.state.security_features.set(
+                (self.state.security_features.get().value + 1) % len(self.state.security_features.State)
+            )
+        elif x == 10:
             exit()
         else:
             print('Wrong choice')
