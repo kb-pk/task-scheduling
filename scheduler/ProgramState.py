@@ -23,7 +23,7 @@ class ProgramState:
         pass
 
     class __StopCriterionState:
-        class State:
+        class State(Enum):
             iterations = 0
             fitness_function_value = 1
 
