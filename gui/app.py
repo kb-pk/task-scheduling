@@ -407,6 +407,34 @@ class GUI(tk.Tk, UI):
                 self.state.stop_criterion.set(sel)
         except Exception:
             pass
+
+        # Sync commonly cached fields used by evolutionary methods
+        try:
+            # Many methods cache values derived from PARAM_DEFS during __init__
+            # Refresh them here after we've set new values from the UI.
+            params = getattr(method, 'PARAM_DEFS', None)
+            if isinstance(params, list) and len(params) >= 2:
+                # Population size
+                if hasattr(method, '_pop_size'):
+                    try:
+                        method._pop_size = params[0].get_value()
+                    except Exception:
+                        pass
+                # Stop criteria-related cached fields
+                if hasattr(method, '_stop_criteria') or hasattr(method, '_iterations') or hasattr(method, '_sched_value'):
+                    try:
+                        stop_criteria = params[1].get_value()  # list of ParamDef
+                        if hasattr(method, '_stop_criteria'):
+                            method._stop_criteria = stop_criteria
+                        # Index 0: iterations, Index 1: target sched value
+                        if hasattr(method, '_iterations') and len(stop_criteria) > 0:
+                            method._iterations = stop_criteria[0].get_value()
+                        if hasattr(method, '_sched_value') and len(stop_criteria) > 1:
+                            method._sched_value = stop_criteria[1].get_value()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     
 
     def _on_close(self) -> None:
@@ -491,15 +519,10 @@ class GUI(tk.Tk, UI):
             self._clear_children(self._gantt_energy)
             self._clear_children(self._gantt_makespan)
 
-            if _HAS_MPL:
-                self._draw_mpl_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
-                self._draw_mpl_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
-                # Gantt with matplotlib
-                self._draw_mpl_gantt_makespan(self._gantt_makespan, method)
-                self._draw_mpl_gantt_energy(self._gantt_energy, method)
-            else:
-                self._draw_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
-                self._draw_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
+            self._draw_mpl_line_makespan(self._linear_makespan, ys_mk)
+            self._draw_mpl_line_energy(self._linear_energy, ys_en)
+            self._draw_mpl_gantt_makespan(self._gantt_makespan, method)
+            self._draw_mpl_gantt_energy(self._gantt_energy, method)
         except Exception:
             import traceback
             self._append_diag(traceback.format_exc(), tag="err")
@@ -511,54 +534,10 @@ class GUI(tk.Tk, UI):
         except Exception:
             pass
 
-    def _draw_line(self, frame, ys, title: str = "Value over Epochs", y_label: str = "Value") -> None:
-        self.update_idletasks()
-        width = max(600, frame.winfo_width() or 600)
-        height = 260
-        pad_l, pad_r, pad_t, pad_b = 50, 20, 24, 40
-        c = tk.Canvas(frame, width=width, height=height, highlightthickness=0)
-        c.pack(fill="both", expand=True)
-        c.create_text(pad_l, 6, text=title, anchor="nw")
-        if not ys:
-            c.create_text(width/2, height/2, text="No data", fill="#666")
-            return
-        n = len(ys)
-        xs = list(range(n))
-        min_y = min(ys)
-        max_y = max(ys)
-        if max_y == min_y:
-            max_y = min_y + 1.0
-        plot_w = width - pad_l - pad_r
-        plot_h = height - pad_t - pad_b
-        # Axes
-        c.create_line(pad_l, pad_t, pad_l, pad_t + plot_h, fill="#333")
-        c.create_line(pad_l, pad_t + plot_h, pad_l + plot_w, pad_t + plot_h, fill="#333")
-        # Y ticks (5)
-        for i in range(6):
-            yv = min_y + (max_y - min_y) * i / 5
-            y = pad_t + plot_h - (plot_h * i / 5)
-            c.create_line(pad_l - 4, y, pad_l, y, fill="#333")
-            c.create_text(pad_l - 8, y, text=f"{yv:.2f}", anchor="e", fill="#333")
-        # X ticks (up to 10)
-        step = max(1, n // 10)
-        for i in range(0, n, step):
-            x = pad_l + plot_w * (i / max(1, n - 1))
-            c.create_line(x, pad_t + plot_h, x, pad_t + plot_h + 4, fill="#333")
-            c.create_text(x, pad_t + plot_h + 14, text=str(i), anchor="n", fill="#333")
-        # Polyline
-        pts = []
-        for i, yv in enumerate(ys):
-            x = pad_l + plot_w * (i / max(1, n - 1))
-            y = pad_t + plot_h - ((yv - min_y) / (max_y - min_y)) * plot_h
-            pts.extend([x, y])
-        c.create_line(*pts, fill="#1f77b4", width=2)
-        # Points
-        for i in range(n):
-            x = pad_l + plot_w * (i / max(1, n - 1))
-            y = pad_t + plot_h - ((ys[i] - min_y) / (max_y - min_y)) * plot_h
-            c.create_oval(x-2, y-2, x+2, y+2, fill="#1f77b4", outline="")
+    
 
-    def _draw_mpl_line(self, frame, ys, title: str = "Value over Epochs", y_label: str = "Value") -> None:
+    # --- Matplotlib-backed line charts
+    def _draw_mpl_line_metric(self, frame, ys, title: str, y_label: str) -> None:
         if not ys:
             lbl = ttk.Label(frame, text="No data", foreground="#666")
             lbl.pack()
@@ -608,6 +587,12 @@ class GUI(tk.Tk, UI):
         # Bind after packing so sizes are available
         frame.bind("<Configure>", lambda e: _on_resize(e))
         _on_resize()
+
+    def _draw_mpl_line_makespan(self, frame, ys) -> None:
+        self._draw_mpl_line_metric(frame, ys, title="Makespan over Epochs", y_label="Makespan")
+
+    def _draw_mpl_line_energy(self, frame, ys) -> None:
+        self._draw_mpl_line_metric(frame, ys, title="Energy over Epochs", y_label="Energy")
 
     def _draw_mpl_gantt_makespan(self, frame, method: BaseMethod) -> None:
         try:
