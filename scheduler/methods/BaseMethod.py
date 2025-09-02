@@ -4,19 +4,25 @@ import numpy as np
 from scheduler.MethodCache import MethodCache
 from lang.Lang import T
 from scheduler.Logger import Logger
-from scheduler.Parameters import ParamDef
+from scheduler.Parameters import ParamDef, ParamValueTypes
 from scheduler.ProgramState import ProgramState
 from scheduler.methods.IndividualFitness import IndividualFitness
 
 
 class BaseMethod(ABC):
     def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
-        self.PARAM_DEFS = []
         self.cache = cache
 
         self.state = state
         self.logger = logger
         self.T = t
+
+        self.PARAM_DEFS = [
+            ParamDef(self.T.t("Enable security features"), ParamValueTypes.BOOLEAN, bool(self.state.security_features.get().value),
+                     self.T.t("Enable security features (prevents some machines from running some tasks)")),
+        ]
+
+        self._security_features = self.PARAM_DEFS[0]
 
         # TODO - these should be immutable (hidden behind getters), but whatever...
         self.features = self.cache[MethodCache.CacheObject.security_features]
