@@ -15,6 +15,10 @@ class BaseMethod(ABC):
         self.PARAM_DEFS = []
         self.cache = cache
 
+        self.state = state
+        self.logger = logger
+        self.T = t
+
         # TODO - these should be immutable (hidden behind getters), but whatever...
         self.features = self.cache[MethodCache.CacheObject.security_features]
         self.machines = self.cache[MethodCache.CacheObject.machines]
@@ -33,10 +37,6 @@ class BaseMethod(ABC):
 
         self.name = None
         self.description = None
-
-        self.state = state
-        self.logger = logger
-        self.T = t
 
     def set_parameters(self, method_params: list[ParamDef]):
         """
