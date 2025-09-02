@@ -23,7 +23,9 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
         self.PARAM_DEFS += params
 
-        self._mutation_probability = params[0].get_value()
+        self._pop_size.set_value(len(self.machines))
+
+        self._pm = params[0]
 
         self.name = self.T.t("Michigan")
         self.description = self.T.td({
@@ -155,7 +157,7 @@ class MichiganMethod(EvolAlgoBaseMethod):
         return child1, child2
 
     def __check_mutation(self):
-        return np.random.uniform(0, 1) <= self._mutation_probability
+        return np.random.uniform(0, 1) <= self._pm.get_value()
 
     def _mutate_population(self):
         """
