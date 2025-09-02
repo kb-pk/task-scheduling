@@ -115,10 +115,12 @@ class MichiganMethod(EvolAlgoBaseMethod):
         sorted_pop = self.__sort_population()
 
         top, bottom = self.__split_population(sorted_pop)
-        for t, b in zip(top, bottom):
-            self.__cross_pair(t, b)
+        new_t = top.copy()
+        new_b = bottom.copy()
+        for i, (t, b) in enumerate(zip(top, bottom)):
+            new_t[i], new_b[i] = self.__cross_pair(t, b)
 
-        self.population = top + bottom
+        self.population = new_t + new_b
 
     def __split_population(self, population):
         """
@@ -127,14 +129,14 @@ class MichiganMethod(EvolAlgoBaseMethod):
         :return: shuffled top and bottom halves.
         """
         # guaranteed to be even, but whatever
-        mid = self._pop_size // 2
+        mid = self._pop_size.get_value() // 2
 
         top, bottom = population[:mid], population[mid:]
 
         np.random.shuffle(top)
         np.random.shuffle(bottom)
 
-        return top, bottom
+        return list(top), list(bottom)
 
     def __cross_pair(self, first, second):
         """
@@ -147,10 +149,10 @@ class MichiganMethod(EvolAlgoBaseMethod):
         size_second = len(second)
         cp1 = randint(1, size_first) if size_first > 1 else 1
         cp2 = randint(1, size_second) if size_second > 1 else 1
-        tmp_first = np.concatenate((first[:cp1], second[cp2:size_second]), axis=0)
-        tmp_second = np.concatenate((second[:cp2], first[cp1:size_first]), axis=0)
-        first = tmp_first
-        second = tmp_second
+        child1 = first[:cp1] + second[cp2:]
+        child2 = second[:cp2] + first[cp1:]
+
+        return child1, child2
 
     def __check_mutation(self):
         return np.random.uniform(0, 1) <= self._mutation_probability
