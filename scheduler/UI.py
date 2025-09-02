@@ -38,7 +38,8 @@ class CLI(UI):
                 "5. " + self.T.t("Fruitfly"),
                 "6. " + self.T.t("Switch scheduling mode (current mode: ") + self.state.scheduling.get().name + ")",
                 "7. " + self.T.t("Switch output mode (current mode: ") + self.state.output.get().name + ")",
-                "8. " + self.T.t("Exit program")
+                "8. " + self.T.t("Switch stop criterion (current mode: " + self.state.stop_criterion.get().name + ")"),
+                "9. " + self.T.t("Exit program")
             ]
 
             try:
@@ -77,6 +78,10 @@ class CLI(UI):
                 (self.state.output.get().value + 1) % len(self.state.output.State)
             )
         elif x == 8:
+            self.state.stop_criterion.set(
+                (self.state.stop_criterion.get().value + 1) % len(self.state.stop_criterion.State)
+            )
+        elif x == 9:
             exit()
         else:
             print('Wrong choice')
