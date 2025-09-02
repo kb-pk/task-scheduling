@@ -27,8 +27,8 @@ class PittDirectMethod(BasePittMethod):
         self.PARAM_DEFS += params
 
         # defaults (for easier access - therefore hacky)
-        self._crossover_points = self.PARAM_DEFS[0].get_value()
-        self._mutation_probability = self.PARAM_DEFS[1].get_value()
+        self._crossover_points = params[0].get_value()
+        self._mutation_probability = params[1].get_value()
 
         self.name = self.T.t("Pitt (direct)")
         self.description = self.T.td({
