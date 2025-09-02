@@ -45,7 +45,16 @@ class ParamDef2:
         self._max_value = max_value
         self._validator = validator
 
-        self._value = default
+        self._value = self._ensure_within_bounds(default)
+
+    def _ensure_within_bounds(self, value):
+        if self._max_value is not None and value > self._max_value:
+            raise ValueError("Value bigger than max")
+
+        if self._min_value is not None and value < self._min_value:
+            raise ValueError("Value smaller than min")
+
+        return value
 
     def _cast(self, value):
         return self._CASTERS[self._ptype](value)
@@ -74,8 +83,7 @@ class ParamDef2:
     def set_value(self, new_value):
         casted = self._cast(new_value)
 
-        if self._max_value < casted < self._min_value:
-            raise ValueError("Value not withing min/max bounds")
+        casted = self._ensure_within_bounds(casted)
 
         if self._validator is not None:
             self._validator.validate(casted)
