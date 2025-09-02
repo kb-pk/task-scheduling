@@ -4,6 +4,8 @@ from typing import Optional
 import sys
 import io
 
+from scheduler.UI import UI
+
 from .method_loader import method_name_map
 from . import tooltip
 from .description_loader import get_description
@@ -27,7 +29,7 @@ def _refresh_description_for(app) -> None:
         pass
 
 
-class SchedulerApp(tk.Tk):
+class SchedulerApp(tk.Tk, UI):
     def __init__(self) -> None:
         super().__init__()
         self.title("Task Scheduling")
