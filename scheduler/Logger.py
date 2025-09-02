@@ -7,8 +7,10 @@ class Logger:
         self.__state = state
         self.__ui_log = ui_log
 
-    def __log(self, message: str):
-        self.__ui_log(message)
+        self.__message = ""
+
+    def __log(self):
+        self.__ui_log(self.__message)
 
     def __get_scheduling_mode(self):
         return self.__state.scheduling.get().name
@@ -17,17 +19,17 @@ class Logger:
         return self.__state.output.get().name
 
     def better_solution_found(self, value, epoch):
-        message = f"Better {self.__get_scheduling_mode()} found in epoch {epoch}, {self.__get_output_mode()} - {value}"
-        self.__log(message)
+        self.__message = f"Better {self.__get_scheduling_mode()} found in epoch {epoch}, {self.__get_output_mode()} - {value}"
+        self.__log()
 
     def initial_solution(self, value):
-        message = f"Initial {self.__get_output_mode()} - {value}"
-        self.__log(message)
+        self.__message = f"Initial {self.__get_output_mode()} - {value}"
+        self.__log()
 
     def error_invalid_parameter_ui(self, value):
-        message = f"Invalid parameter for ui passed, defaulting to {value}"
-        self.__log(message)
+        self.__message = f"Invalid parameter for ui passed, defaulting to {value}"
+        self.__log()
 
     def error_no_parameter_ui(self, value):
-        message = f"No parameter for ui passed, defaulting to {value}"
-        self.__log(message)
+        self.__message = f"No parameter for ui passed, defaulting to {value}"
+        self.__log()
