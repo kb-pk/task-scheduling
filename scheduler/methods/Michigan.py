@@ -65,26 +65,6 @@ class MichiganMethod(EvolAlgoBaseMethod):
         # get rid of ndarray
         self.population = [list(t) for t in tasks_to_machines]
 
-        self.__check_population_validity()
-
-    def __check_population_validity(self):
-        """
-        Check the validity of the population (based on security features)
-        and redistribute randomly the wrongly assigned tasks.
-        """
-        # check validity
-        wrongly_assigned_tasks = []
-
-        for m_id, tasks in enumerate(self.population):
-            for t in tasks:
-                if m_id not in self._tasks_possible_machines[t]:
-                    wrongly_assigned_tasks.append(t)
-
-        # redistribute tasks
-        for t in wrongly_assigned_tasks:
-            new_m_id = np.random.choice(self._tasks_possible_machines[t])
-            self.population[new_m_id].append(t)
-
     def __fitness_for_machine(self, machine_id, machine_tasks):
         """
         Makes use of existing fitness functions to get fitness function for a single machine
