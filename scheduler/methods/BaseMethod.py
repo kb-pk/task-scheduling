@@ -13,6 +13,8 @@ class BaseMethod(ABC):
     def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
         self.cache = cache
 
+        self.PARAM_DEFS = []
+
         self.state = state
         self.logger = logger
         self.T = t
