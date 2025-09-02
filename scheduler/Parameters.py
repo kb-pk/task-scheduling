@@ -53,6 +53,9 @@ class ParamDef2:
     def get_name(self):
         return self._name
 
+    def get_ptype(self):
+        return self._ptype
+
     def get_description(self):
         return self._description
 
