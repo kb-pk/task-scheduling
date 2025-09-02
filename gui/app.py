@@ -253,6 +253,7 @@ class GUI(tk.Tk, UI):
         val = self._objective_var.get().upper()
         try:
             if val == "ENERGY":
+                # Only change optimization objective; leave output as configured by user/system
                 self.state.scheduling.set(self.state.scheduling.State.energy)
                 Common.scheduling_mode = Common.ENERGY_MODE
             else:
@@ -467,14 +468,22 @@ class GUI(tk.Tk, UI):
     # --- Plot rendering ---
     def _render_plots(self, method: BaseMethod) -> None:
         try:
-            history = getattr(method, 'get_history', None)
-            if callable(history):
-                hist = history() or {}
-                ys_mk = list(hist.get('makespan', []))
-                ys_en = list(hist.get('energy', []))
-            else:
-                ys_mk = []
-                ys_en = []
+            history_fn = getattr(method, 'get_history', None)
+            ys_mk, ys_out = [], []
+            if callable(history_fn):
+                hist = history_fn()
+                # Handle both legacy dict and new list[IndividualFitness]
+                if isinstance(hist, dict):
+                    ys_mk = list(hist.get('makespan', []))
+                    out_series = 'energy' if self.state.output.get() == self.state.output.State.energy else 'makespan'
+                    ys_out = list(hist.get(out_series, []))
+                elif isinstance(hist, list):
+                    try:
+                        mk_key = self.state.scheduling.State.makespan
+                        ys_mk = [float(h.get_all()[mk_key]) for h in hist if h is not None]
+                        ys_out = [float(h.output()) for h in hist if h is not None]
+                    except Exception:
+                        ys_mk, ys_out = [], []
 
             # Clear containers
             self._clear_children(self._linear_energy)
@@ -484,13 +493,15 @@ class GUI(tk.Tk, UI):
 
             if _HAS_MPL:
                 self._draw_mpl_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
-                self._draw_mpl_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
+                out_name = self.state.output.get().name.capitalize()
+                self._draw_mpl_line(self._linear_energy, ys_out, title=f"{out_name} over Epochs", y_label=out_name)
                 # Gantt with matplotlib
                 self._draw_mpl_gantt_makespan(self._gantt_makespan, method)
                 self._draw_mpl_gantt_energy(self._gantt_energy, method)
             else:
                 self._draw_line(self._linear_makespan, ys_mk, title="Makespan over Epochs", y_label="Makespan")
-                self._draw_line(self._linear_energy, ys_en, title="Energy over Epochs", y_label="Energy")
+                out_name = self.state.output.get().name.capitalize()
+                self._draw_line(self._linear_energy, ys_out, title=f"{out_name} over Epochs", y_label=out_name)
         except Exception:
             import traceback
             self._append_diag(traceback.format_exc(), tag="err")
@@ -557,11 +568,32 @@ class GUI(tk.Tk, UI):
         fig = Figure(figsize=(6, 3), dpi=100)
         ax = fig.add_subplot(111)
         xs = list(range(len(ys)))
-        ax.plot(xs, ys, marker='o', markersize=2, linewidth=1.2)
+        # Plot best-so-far as a step function to highlight changes
+        ax.step(xs, ys, where='post', linewidth=1.5, color="#1f77b4", label="Best so far")
+        # Highlight epochs where the best value improved
+        change_x = []
+        change_y = []
+        prev = ys[0]
+        for i in range(1, len(ys)):
+            if ys[i] < prev:
+                change_x.append(i)
+                change_y.append(ys[i])
+                prev = ys[i]
+        if change_x:
+            ax.scatter(change_x, change_y, s=18, color="#d62728", zorder=3, label="Improvement")
         ax.set_title(title)
         ax.set_xlabel("Epoch")
         ax.set_ylabel(y_label)
+        # Format Y axis to plain numbers (no scientific notation)
+        try:
+            from matplotlib.ticker import StrMethodFormatter
+            ax.ticklabel_format(style='plain', axis='y', useOffset=False)
+            ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}'))
+        except Exception:
+            pass
         ax.grid(True, alpha=0.3)
+        ax.legend(loc="best")
+        fig.tight_layout()
         canvas = FigureCanvasTkAgg(fig, master=frame)
         widget = canvas.get_tk_widget()
         widget.pack(fill="both", expand=True)
