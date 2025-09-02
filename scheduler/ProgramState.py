@@ -22,6 +22,23 @@ class ProgramState:
     class __OutputState(__SchedulingState):
         pass
 
+    class __StopCriterionState:
+        class State:
+            iterations = 0
+            fitness_function_value = 1
+
+        def __init__(self):
+            self.__current_state = self.State.iterations
+
+        def get(self):
+            return self.__current_state
+
+        def set(self, value: State):
+            if not self.State.__contains__(value):
+                raise ValueError("Invalid enum value")
+
+            self.__current_state = self.State(value)
+
     class __UserInterfaceState:
         class State(Enum):
             CLI = 0
@@ -61,6 +78,7 @@ class ProgramState:
     def __init__(self):
         self.scheduling = self.__SchedulingState()
         self.output = self.__OutputState()
+        self.stop_criterion = self.__StopCriterionState()
         self.ui = self.__UserInterfaceState()
         self.lang = self.__LangState()
 
