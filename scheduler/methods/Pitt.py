@@ -18,4 +18,4 @@ class BasePittMethod(EvolAlgoBaseMethod):
         pass
 
     def _generate_population(self):
-        self.population = [self._generate_individual() for _ in range(self._pop_size)]
+        self.population = [self._generate_individual() for _ in range(self._pop_size.get_value())]

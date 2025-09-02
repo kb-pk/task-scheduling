@@ -109,7 +109,7 @@ class DragonflyMethod(ParticleSwarmMethod, ABC):
         while not self.stop():
             dist = np.linalg.norm(self.population[:, None, :] - self.population[None, :, :], axis=2)
 
-            for i in range(self._pop_size):
+            for i in range(self._pop_size.get_value()):
                 neighbors = np.where((dist[i] < self._neighbour_radius) & (dist[i] > 0))[0]
 
                 if len(neighbors) > 0:

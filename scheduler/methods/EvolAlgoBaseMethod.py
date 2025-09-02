@@ -33,10 +33,11 @@ class EvolAlgoBaseMethod(BaseMethod):
                      )
         ]
 
-        self._pop_size = self.PARAM_DEFS[0].get_value()
+        # shorthands
+        self._pop_size = self.PARAM_DEFS[0]
         self._stop_criteria = self.PARAM_DEFS[1].get_value()
-        self._iterations = self._stop_criteria[0].get_value()
-        self._sched_value = self._stop_criteria[1].get_value()
+        self._iterations = self._stop_criteria[0]
+        self._sched_value = self._stop_criteria[1]
 
         self._epoch = 0
 
@@ -61,9 +62,9 @@ class EvolAlgoBaseMethod(BaseMethod):
     def stop(self):
         match self.state.stop_criterion.get():
             case self.state.stop_criterion.State.iterations:
-                return self._epoch >= self._iterations
+                return self._epoch >= self._iterations.get_value()
             case self.state.stop_criterion.State.fitness_function_value:
-                return self.best_score.scheduling() <= self._sched_value
+                return self.best_score.scheduling() <= self._sched_value.get_value()
             case _:
                 raise NotImplementedError
 
