@@ -105,7 +105,6 @@ class MichiganMethod(EvolAlgoBaseMethod):
     def _crossover_population(self):
         """
         Krzyżuje populację parami maszyn (z top i bottom).
-        :param population: DataFrame populacji
         :return: nowa populacja po krzyżowaniu
         """
         sorted_pop = self.__sort_population()
@@ -150,9 +149,7 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
     def _mutate_population(self):
         """
-        Mutacja populacji:
-          - Dla każdej maszyny z prawdopodobieństwem pm tasuje prefix chromosomu.
-        :return: zmutowana populacja (in-place)
+        Mutacja populacji (in-place shuffle)
         """
         for individual in self.population:
             if self.__check_mutation():
@@ -167,7 +164,7 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
     def _evaluate_population(self):
         """
-        Here the whole population is the solution
+        In Michigan representation, the whole population is the solution
         """
         current = self.build_schedule_map(self.population)
         current_f = self._fitness(current)
