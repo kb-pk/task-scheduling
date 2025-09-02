@@ -87,13 +87,7 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
         return sorted_pop
 
-        #return sorted(self.population, key=lambda x: self._fitness(self.build_schedule_map(x)).scheduling())
-
     def _crossover_population(self):
-        """
-        Krzyżuje populację parami maszyn (z top i bottom).
-        :return: nowa populacja po krzyżowaniu
-        """
         sorted_pop = self.__sort_population()
 
         top, bottom = self.__split_population(sorted_pop)
