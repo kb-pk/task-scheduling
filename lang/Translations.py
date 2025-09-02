@@ -21,6 +21,11 @@ class Translations:
                 "Enable/disable security features (current mode: ": "Włącz/wyłącz funkcjonalności bezpieczeństwa (obecnie: ",
                 "Exit program": "Wyjdź z programu",
                 "Invalid choice": "Nieprawidłowy wybór",
+                "Change default values of parameters": "Zmień wartości domyślne parametrów",
+                "Type - ": "Typ - ",
+                "Default value - ": "Wartość domyślna - ",
+                "Minimum value - ": "Wartość minimalna - ",
+                "Maximum value - ": "Wartość maksymalna - ",
 
                 "Enable security features": "Włącz funkcjonalności bezpieczeństwa",
                 "Enable security features (prevents some machines from running some tasks)":
