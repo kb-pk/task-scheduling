@@ -91,10 +91,6 @@ class DragonflyMethod(ParticleSwarmMethod, ABC):
             """
         })
 
-    def _generate_population(self):
-        self.population = np.random.uniform(0, len(self.machines) - 1, size=(self._pop_size, len(self.tasks)))
-        self._velocity = np.zeros_like(self.population)
-
     def __set_food_and_enemies(self):
         fitness_of_individuals = [
              self._fitness(self.build_schedule_map(individual)).scheduling() for individual in self.population
@@ -105,9 +101,6 @@ class DragonflyMethod(ParticleSwarmMethod, ABC):
 
         self._food = self.population[food_inx]
         self._enemies = self.population[enemies_inx]
-
-    def initialize(self):
-        super().initialize()
 
     def _evaluate_population(self):
         super()._evaluate_population()
