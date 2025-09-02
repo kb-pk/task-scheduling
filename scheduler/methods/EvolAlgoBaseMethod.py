@@ -4,7 +4,7 @@ from lang.Lang import T
 from scheduler import Common
 from scheduler.Logger import Logger
 from scheduler.MethodCache import MethodCache
-from scheduler.Parameters import ParamDef2, ParamValueTypes, PopulationValidator
+from scheduler.Parameters import ParamDef, ParamValueTypes, PopulationValidator
 from scheduler.ProgramState import ProgramState
 from scheduler.methods.BaseMethod import BaseMethod
 
@@ -17,20 +17,20 @@ class EvolAlgoBaseMethod(BaseMethod):
         self._tasks_possible_machines = None
 
         self.PARAM_DEFS = [
-            ParamDef2(self.T.t("Population size"), ParamValueTypes.INT, 10, self.T.t("Population size (must be even)"),
-                      min_value=2,
-                      validator=PopulationValidator()),
-            ParamDef2(self.T.t("Stop criterion"), ParamValueTypes.LIST_SINGLE, [
-                ParamDef2(self.T.t("Iterations"), ParamValueTypes.INT, 100,
-                          self.T.t("Number of iterations (epochs)"),
-                          min_value=1),
-                ParamDef2(self.T.t("Fitness function value"), ParamValueTypes.FLOAT, 6000,
-                          self.T.t("The value which the algorithm is optimising (") +
-                          self.T.t(self.state.scheduling.get().name) + ")",
-                          min_value=1),
+            ParamDef(self.T.t("Population size"), ParamValueTypes.INT, 10, self.T.t("Population size (must be even)"),
+                     min_value=2,
+                     validator=PopulationValidator()),
+            ParamDef(self.T.t("Stop criterion"), ParamValueTypes.LIST_SINGLE, [
+                ParamDef(self.T.t("Iterations"), ParamValueTypes.INT, 100,
+                         self.T.t("Number of iterations (epochs)"),
+                         min_value=1),
+                ParamDef(self.T.t("Fitness function value"), ParamValueTypes.FLOAT, 6000,
+                         self.T.t("The value which the algorithm is optimising (") +
+                         self.T.t(self.state.scheduling.get().name) + ")",
+                         min_value=1),
             ],
-                self.T.t("Criterion for stopping the evolution")
-            )
+                     self.T.t("Criterion for stopping the evolution")
+                     )
         ]
 
         self._pop_size = self.PARAM_DEFS[0].get_value()

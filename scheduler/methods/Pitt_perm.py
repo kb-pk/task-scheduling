@@ -11,7 +11,7 @@ from scheduler.MethodCache import MethodCache
 from scheduler.Logger import Logger
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import MethodRegistrator
-from scheduler.Parameters import ParamDef2, ParamValueTypes, PittPermCrossoverValidator, InfluenceGroupInstantiator
+from scheduler.Parameters import ParamDef, ParamValueTypes, PittPermCrossoverValidator, InfluenceGroupInstantiator
 from scheduler.methods.Pitt import BasePittMethod
 
 @MethodRegistrator.register_class
@@ -21,19 +21,19 @@ class PittPermMethod(BasePittMethod):
 
         params = [
             * InfluenceGroupInstantiator.set([
-                ParamDef2(self.T.t("PMX"), ParamValueTypes.BOOLEAN, True,
-                          self.T.t("Partial mapped crossover")),
-                ParamDef2(self.T.t("CX"), ParamValueTypes.BOOLEAN, False,
-                        self.T.t("Cycle crossover")),
-                ParamDef2(self.T.t("OX"), ParamValueTypes.BOOLEAN, False,
-                          self.T.t("Ordered crossover")),
+                ParamDef(self.T.t("PMX"), ParamValueTypes.BOOLEAN, True,
+                         self.T.t("Partial mapped crossover")),
+                ParamDef(self.T.t("CX"), ParamValueTypes.BOOLEAN, False,
+                         self.T.t("Cycle crossover")),
+                ParamDef(self.T.t("OX"), ParamValueTypes.BOOLEAN, False,
+                         self.T.t("Ordered crossover")),
             ], PittPermCrossoverValidator),
-            ParamDef2(self.T.t("Mutation probability (pms)"), ParamValueTypes.FLOAT, 0.01,
-                      self.T.t("Gene swap mutation probability"),
-                      min_value=0.0, max_value=1.0),
-            ParamDef2(self.T.t("Mutation probability (pmt)"), ParamValueTypes.FLOAT, 0.01,
-                      self.T.t("Gene transposition mutation probability"),
-                      min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Mutation probability (pms)"), ParamValueTypes.FLOAT, 0.01,
+                     self.T.t("Gene swap mutation probability"),
+                     min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Mutation probability (pmt)"), ParamValueTypes.FLOAT, 0.01,
+                     self.T.t("Gene transposition mutation probability"),
+                     min_value=0.0, max_value=1.0),
         ]
 
         self.PARAM_DEFS += params

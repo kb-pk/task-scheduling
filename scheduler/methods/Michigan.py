@@ -1,13 +1,12 @@
-from random import randint, shuffle
+from random import randint
 import numpy as np
-import pandas as pd
 
 from lang.Lang import T
 from scheduler.Logger import Logger
 from scheduler.MethodCache import MethodCache
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import MethodRegistrator
-from scheduler.Parameters import ParamDef2, ParamValueTypes
+from scheduler.Parameters import ParamDef, ParamValueTypes
 from scheduler.methods.EvolAlgoBaseMethod import EvolAlgoBaseMethod
 
 
@@ -17,9 +16,9 @@ class MichiganMethod(EvolAlgoBaseMethod):
         super().__init__(state, logger, t, cache)
 
         params = [
-            ParamDef2(self.T.t("Mutation probability"), ParamValueTypes.FLOAT, 0.01,
-                      self.T.t("Gene mutation probability"),
-                      min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Mutation probability"), ParamValueTypes.FLOAT, 0.01,
+                     self.T.t("Gene mutation probability"),
+                     min_value=0.0, max_value=1.0),
         ]
 
         self.PARAM_DEFS += params

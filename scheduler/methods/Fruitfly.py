@@ -1,14 +1,10 @@
-from platform import machine
-
 import numpy as np
-import scheduler.Common as Common
 from lang.Lang import T
 from scheduler.Logger import Logger
 from scheduler.MethodCache import MethodCache
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import MethodRegistrator
-from scheduler.methods.BaseMethod import BaseMethod
-from scheduler.Parameters import ParamDef, ParamDef2, ParamValueTypes
+from scheduler.Parameters import ParamDef, ParamValueTypes
 from scheduler.methods.ParticleSwarmMethod import ParticleSwarmMethod
 
 @MethodRegistrator.register_class
@@ -17,8 +13,8 @@ class FruitflyMethod(ParticleSwarmMethod):
         super().__init__(state, logger, t, cache)
 
         params = [
-            ParamDef2(self.T.t("step size"), ParamValueTypes.FLOAT, 10, self.T.t("Step size in vision phase"),
-                      min_value=0.0, max_value=len(self.machines))
+            ParamDef(self.T.t("step size"), ParamValueTypes.FLOAT, 10, self.T.t("Step size in vision phase"),
+                     min_value=0.0, max_value=len(self.machines))
         ]
 
         self.PARAM_DEFS += params

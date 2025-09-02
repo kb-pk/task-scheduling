@@ -1,14 +1,12 @@
 from abc import ABC
 
 import numpy as np
-import scheduler.Common as Common
 from lang.Lang import T
 from scheduler.Logger import Logger
 from scheduler.MethodCache import MethodCache
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import MethodRegistrator
-from scheduler.methods.BaseMethod import BaseMethod
-from scheduler.Parameters import ParamDef, ParamDef2, ParamValueTypes
+from scheduler.Parameters import ParamDef, ParamValueTypes
 from scheduler.methods.ParticleSwarmMethod import ParticleSwarmMethod
 
 @MethodRegistrator.register_class
@@ -17,25 +15,25 @@ class DragonflyMethod(ParticleSwarmMethod, ABC):
         super().__init__(state, logger, t, cache)
 
         params = [
-            ParamDef2(self.T.t("Inertia"), ParamValueTypes.FLOAT, 0.9, self.T.t("Movement inertia"),
-                      min_value=0.0, max_value=1.0),
-            ParamDef2(self.T.t("Separation"), ParamValueTypes.FLOAT, 0.1, self.T.t("Separation between entities"),
-                      min_value=0.0, max_value=1.0),
-            ParamDef2(self.T.t("Alignment"), ParamValueTypes.FLOAT, 0.1,
-                      self.T.t("How closely entity's speed matches that of other entities"),
-                      min_value=0.0, max_value=1.0),
-            ParamDef2(self.T.t("Cohesion"), ParamValueTypes.FLOAT, 0.1,
-                      self.T.t("How much the entity is drawn to the center of their neighbourhood"),
-                      min_value=0.0, max_value=1.0),
-            ParamDef2(self.T.t("Food attraction"), ParamValueTypes.FLOAT, 2.0,
-                      self.T.t("How much the entity is drawn to food sources"),
-                      min_value=0.0, max_value=10.0),
-            ParamDef2(self.T.t("Enemy repulsion"), ParamValueTypes.FLOAT, 1.0,
-                      self.T.t("How much the entity is drawn away from enemy sources"),
-                      min_value=0.0, max_value=10.0),
-            ParamDef2(self.T.t("Neighbour radius"), ParamValueTypes.FLOAT, (len(self.machines) - 1) / 2,
+            ParamDef(self.T.t("Inertia"), ParamValueTypes.FLOAT, 0.9, self.T.t("Movement inertia"),
+                     min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Separation"), ParamValueTypes.FLOAT, 0.1, self.T.t("Separation between entities"),
+                     min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Alignment"), ParamValueTypes.FLOAT, 0.1,
+                     self.T.t("How closely entity's speed matches that of other entities"),
+                     min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Cohesion"), ParamValueTypes.FLOAT, 0.1,
+                     self.T.t("How much the entity is drawn to the center of their neighbourhood"),
+                     min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Food attraction"), ParamValueTypes.FLOAT, 2.0,
+                     self.T.t("How much the entity is drawn to food sources"),
+                     min_value=0.0, max_value=10.0),
+            ParamDef(self.T.t("Enemy repulsion"), ParamValueTypes.FLOAT, 1.0,
+                     self.T.t("How much the entity is drawn away from enemy sources"),
+                     min_value=0.0, max_value=10.0),
+            ParamDef(self.T.t("Neighbour radius"), ParamValueTypes.FLOAT, (len(self.machines) - 1) / 2,
                       "",
-                      min_value=0.0, max_value=len(self.machines)),
+                     min_value=0.0, max_value=len(self.machines)),
         ]
 
         self.PARAM_DEFS += params

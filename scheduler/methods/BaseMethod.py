@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
-import scheduler.Common as Common
 from scheduler.MethodCache import MethodCache
 from lang.Lang import T
 from scheduler.Logger import Logger

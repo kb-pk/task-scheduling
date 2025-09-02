@@ -8,7 +8,7 @@ from scheduler.Logger import Logger
 from scheduler.MethodCache import MethodCache
 from scheduler.ProgramState import ProgramState
 from scheduler.Registry import MethodRegistrator
-from scheduler.Parameters import ParamDef2, ParamValueTypes
+from scheduler.Parameters import ParamDef, ParamValueTypes
 from scheduler.methods.Pitt import BasePittMethod
 
 
@@ -18,10 +18,10 @@ class PittDirectMethod(BasePittMethod):
         super().__init__(state, logger, t, cache)
 
         params =  [
-            ParamDef2(self.T.t("Crossover points"), ParamValueTypes.INT, 1, self.T.t("Number of crossover points"),
-                      min_value=1, max_value=len(self.tasks)),
-            ParamDef2(self.T.t("Mutation probability"), ParamValueTypes.FLOAT, 0.01, self.T.t("Gene mutation probability"),
-                      min_value=0.0, max_value=1.0),
+            ParamDef(self.T.t("Crossover points"), ParamValueTypes.INT, 1, self.T.t("Number of crossover points"),
+                     min_value=1, max_value=len(self.tasks)),
+            ParamDef(self.T.t("Mutation probability"), ParamValueTypes.FLOAT, 0.01, self.T.t("Gene mutation probability"),
+                     min_value=0.0, max_value=1.0),
         ]
 
         self.PARAM_DEFS += params
