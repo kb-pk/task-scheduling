@@ -130,14 +130,8 @@ class EvolAlgoBaseMethod(BaseMethod):
 
         :return: {task_id: [machine_id, machine_id, ...], ...}
         """
-        if self._security_features.get_value():
-             possible_machines_for_tasks = {task_id: [
-                machine_id for machine_id in self.machines.index.values
-                if self.__can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id])
-            ] for task_id in self.tasks.index.values}
-        else:
-            possible_machines_for_tasks = {task_id: [
-                machine_id for machine_id in self.machines.index.values
-            ] for task_id in self.tasks.index.values}
+        possible_machines_for_tasks = {task_id: [
+            machine_id for machine_id in self.machines.index.values
+        ] for task_id in self.tasks.index.values}
 
         return possible_machines_for_tasks
