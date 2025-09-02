@@ -1,272 +1,191 @@
-from random import randint
+from random import randint, shuffle
 import numpy as np
 import pandas as pd
 
-from scheduler.methods.BaseMethod import BaseMethod
-import scheduler.Common as Common
-from scheduler.Parameters import ParamDef
+from lang.Lang import T
+from scheduler.Logger import Logger
+from scheduler.MethodCache import MethodCache
+from scheduler.ProgramState import ProgramState
+from scheduler.Registry import MethodRegistrator
+from scheduler.Parameters import ParamDef2, ParamValueTypes
+from scheduler.methods.EvolAlgoBaseMethod import EvolAlgoBaseMethod
 
-class MichiganMethod(BaseMethod):
-    PARAM_DEFS = [
-        ParamDef("iterations", "int", 100, "Number of iterations", min_value=1),
-        ParamDef("pm", "float", 0.01, "Mutation probability", min_value=0.0, max_value=1.0),
-        ParamDef("show_chart", "bool", True, "Display Gantt chart after run")
-    ]
 
-    def __init__(self, iterations=100, pm=0.01, show_chart=True):
-        super().__init__(iterations=iterations, show_chart=show_chart)
-        self.pm = pm
-        self.population = None         # bieżąca populacja (DataFrame)
-        self.best_population = None    # najlepsza znaleziona populacja (DataFrame)
-        self.best_score = None         # wartość optymalizowanej metryki (lower = better)
-        self.other_score = None        # druga metryka (informacyjnie)
+@MethodRegistrator.register_class
+class MichiganMethod(EvolAlgoBaseMethod):
+    def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
+        super().__init__(state, logger, t, cache)
 
-    def set_parameters(self, iterations=100, pm=0.01, show_chart=True):
-        self.iterations = iterations
-        self.pm = pm
-        self.show_chart = show_chart
+        params = [
+            ParamDef2(self.T.t("Mutation probability"), ParamValueTypes.FLOAT, 0.01,
+                      self.T.t("Gene mutation probability"),
+                      min_value=0.0, max_value=1.0),
+        ]
 
-    def get_name(self):
-        """
-        Zwraca unikalną nazwę metody (używana w plikach wynikowych).
-        """
-        return "michigan"
+        self.PARAM_DEFS += params
 
-    def initialize(self):
-        """
-        Buduje populację początkową oraz wyznacza jej ocenę,
-        ustawiając wartości najlepsze na starcie.
-        """
-        self.population = self._generate_population(self.machines.index.values, self.tasks.index.values)
-        self.population, self.best_score, self.other_score = self._sort_population(self.population)
-        self.best_population = self.population.copy()
+        self._mutation_probability = params[0].get_value()
 
-    def optimize(self):
-        """
-        Pętla główna optymalizacji:
-          1. Krzyżowanie populacji.
-          2. Mutacja wyników.
-          3. Ocena (sortowanie) nowej populacji.
-          4. Aktualizacja najlepszego rozwiązania.
-        """
-        for epoch in range(self.iterations):
-            crossed = self._cross(self.population)
-            mutated = self._mutation(crossed, self.pm)
-            mutated, current_score, other = self._sort_population(mutated)
-            if current_score < self.best_score:
-                self.best_population = mutated.copy()
-                self.best_score = current_score
-                self.other_score = other
-                if Common.scheduling_mode == Common.MAKESPAN_MODE:
-                    print(f"[{epoch}] New best makespan: {self.best_score:.4f} energy: {self.other_score:.4f}")
-                else:
-                    print(f"[{epoch}] New best energy: {self.best_score:.4f} makespan: {self.other_score:.4f}")
-            self.population = mutated
-    
-    def get_best_solution(self):
-        """
-        Zwraca najlepszą aktualnie populację (po optymalizacji).
-        """
-        return self.best_population
+        self.name = self.T.t("Michigan")
+        self.description = self.T.td({
+            self.state.lang.State.pl_PL: """
+            Algorytm oparty o podejście Michigan.
 
-    def _generate_population(self, machines, tasks):
-        """
-        Tworzy populację początkową:
-          - Tasuje listę zadań.
-          - Rozdziela zadania „kolumnami” po maszynach (rundy przydziału).
-          - Wypełnia pozostałe komórki NaN.
-        :param machines: tablica identyfikatorów maszyn
-        :param tasks: tablica identyfikatorów zadań
-        :return: DataFrame populacji
-        :raises ValueError: gdy maszyn jest więcej niż zadań
-        """
-        if len(machines) > len(tasks):
-            raise Exception('Each machine must have at least one task')
-        tasks_cpy = tasks.copy()
+            Osobnik - reprezentacja pojedynczej maszyny z pakietu maszyn. Składa się z 1 chromosomu.
+            Chromosom - reprezentacja przypisanego do osobnika (maszyny) zestawu zadań.
+            Gen - reprezentacja pojedynczego zadania z pakietu zadań. 
+            Selekcja - brak selekcji pomiędzy epokami.
+
+            Krzyżowanie - 1-punktowe, każdy osobnik bierze udział.
+
+            Mutacja - mieszanie (shuffle) genów (zadań) w chromosomie.
+            """,
+
+            self.state.lang.State.en_GB: """
+            Algorithm based on the Michigan approach.
+
+            Entity - a representation of a single machine from the machine array. Made up of 1 chromosome.
+            Chromosome - a representation of the tasks assigned to the entity (machine).
+            Gene - a representation of a single task from the task array.
+
+            Selection - no selection between epochs.
+
+            Crossover - 1-point, every entity takes part.
+
+            Mutation - shuffling of genees (tasks) within a chromosome.
+            """
+        })
+
+    def _generate_population(self):
+        tasks_cpy = self.tasks.index.values.copy()
         np.random.shuffle(tasks_cpy)
-        arr = np.zeros((len(machines), len(tasks_cpy)))
-        arr.fill(np.nan)
-        col = -1
-        for i, t in enumerate(tasks_cpy):
-            m = i % len(machines)
-            if m == 0:
-                col += 1
-            arr[m][col] = t
-        return self._arr_to_df(arr, machines)
 
-    def _arr_to_df(self, data, ids):
-        """
-        Konwertuje macierz numpy na DataFrame o kolumnach task_i.
-        :param data: macierz (maszyny x sloty)
-        :param ids: indeksy wierszy (ID maszyn)
-        :return: DataFrame
-        """
-        cols = [f"task_{i}" for i in range(data.shape[1])]
-        df = pd.DataFrame(data=data, index=ids, columns=cols)
-        df.index.name = 'machines'
-        return df
+        tasks_to_machines = np.array_split(list(tasks_cpy), len(self.machines))
+        # get rid of ndarray
+        self.population = [list(t) for t in tasks_to_machines]
+
+        self.__check_population_validity()
+
+    def __check_population_validity(self):
+        # check validity
+        wrongly_assigned_tasks = []
+
+        for m_id, tasks in enumerate(self.population):
+            for t in tasks:
+                if m_id not in self._tasks_possible_machines[t]:
+                    wrongly_assigned_tasks.append(t)
+
+        # redistribute tasks
+        for t in wrongly_assigned_tasks:
+            new_m_id = np.random.choice(self._tasks_possible_machines[t])
+            self.population[new_m_id].append(t)
 
     @staticmethod
-    def _last_task_index(chrom):
+    def __last_task_index(chrom):
         """
         Zwraca indeks ostatniego rzeczywistego zadania w chromosomie
         (pozycja przed pierwszym NaN).
         :param chrom: tablica z ID zadań i NaN
         :return: indeks (int)
         """
-        for i in range(len(chrom)):
-            if np.isnan(chrom[i]):
-                return i - 1
-        return len(chrom) - 1
+        for i, task in enumerate(chrom):
+            if task is None:
+                return i
 
-    def _mutation(self, population, pm):
-        """
-        Mutacja populacji:
-          - Dla każdej maszyny z prawdopodobieństwem pm tasuje prefix chromosomu.
-        :param population: DataFrame populacji
-        :param pm: prawdopodobieństwo mutacji
-        :return: zmutowana populacja (in-place)
-        """
-        for m_id in population.index:
-            if np.random.uniform(0.0, 1.0) <= pm:
-                chrom = population.loc[m_id].values
-                last = self._last_task_index(chrom)
-                if last > 0:
-                    np.random.shuffle(chrom[:last+1])
-        return population
+        return len(chrom)
 
-    def _cross_pair(self, first, second):
+    def __fitness_for_machine(self, machine_id, machine_tasks):
         """
-        Krzyżuje dwa chromosomy (maszyny) przez wymianę segmentów ogonowych.
-        :param first: tablica (chromosom 1)
-        :param second: tablica (chromosom 2)
+        Makes use of existing fitness functions to get fitness function for a single machine
         """
-        size_first = self._last_task_index(first) + 1
-        size_second = self._last_task_index(second) + 1
-        cp1 = randint(1, size_first) if size_first > 1 else 1
-        cp2 = randint(1, size_second) if size_second > 1 else 1
-        tmp_first = np.concatenate((first[:cp1], second[cp2:size_second]), axis=0)
-        tmp_second = np.concatenate((second[:cp2], first[cp1:size_first]), axis=0)
-        first[:len(tmp_first)] = tmp_first
-        first[len(tmp_first):] = np.nan
-        second[:len(tmp_second)] = tmp_second
-        second[len(tmp_second):] = np.nan
+        faux_map = {m_id: [] for m_id in self.machines}
+        faux_map[machine_id] = machine_tasks
 
-    def _split_population(self, population):
-        """
-        Dzieli populację na dwie połowy (top, bottom) i tasuje kolejność w każdej.
-        :param population: DataFrame populacji
-        :return: (top_df, bottom_df)
-        """
-        mid = len(population) // 2
-        top = population.iloc[:mid].sample(frac=1)       # pandas-native shuffle
-        bottom = population.iloc[mid:].sample(frac=1)
-        return top, bottom
+        return self._fitness(faux_map)
 
-    def _cross(self, population):
+    def __sort_population(self):
+        # najkrotszy czas wykonania albo najmniej zuzytej energii
+        fitness_map = [
+            self.__fitness_for_machine(m_id, tasks).scheduling() for m_id, tasks in enumerate(self.population)
+        ]
+
+        tmp = sorted(zip(self.population, fitness_map), reverse=True)
+        sorted_pop = [t[0] for t in tmp]
+
+        return sorted_pop
+
+        #return sorted(self.population, key=lambda x: self._fitness(self.build_schedule_map(x)).scheduling())
+
+    def _crossover_population(self):
         """
         Krzyżuje populację parami maszyn (z top i bottom).
         :param population: DataFrame populacji
         :return: nowa populacja po krzyżowaniu
         """
-        top, bottom = self._split_population(population)
-        limit = (len(population) + 1) / 2
-        for i in range(int(limit)):
-            self._cross_pair(top.values[i], bottom.values[i])
-        return pd.concat([top, bottom], axis=0)
+        sorted_pop = self.__sort_population()
 
-    def _calc_times(self, population):
-        """
-        Buduje tablicę [machine_id, busy_time] dla każdej maszyny.
-        :param population: DataFrame populacji
-        :return: ndarray (N,2)
-        """
-        tmp = np.zeros(shape=(len(population), 2), dtype=np.float64)
-        for m_id in population.index.values:
-            tmp[m_id] = self._time_on_machine(population.iloc[m_id].values, m_id)
-        return tmp
+        top, bottom = self.__split_population(sorted_pop)
+        for t, b in zip(top, bottom):
+            self.__cross_pair(t, b)
 
-    def _time_on_machine(self, tasks_ids, machine_id):
-        """
-        Sumuje czasy ETC zadań przypisanych do danej maszyny.
-        :param tasks_ids: tablica ID zadań (z NaN jako wypełnieniem)
-        :param machine_id: ID maszyny
-        :return: (machine_id, suma_czasów)
-        """
-        s = 0.0
-        for t in tasks_ids:
-            if np.isnan(t):
-                break
-            s += self.etc[int(t)][int(machine_id)]
-        return machine_id, s
+        self.population = top + bottom
 
-    def _idle_times(self, tmp, mk):
+    def __split_population(self, population):
         """
-        Wylicza tablicę bezczynności (idle_time = makespan - busy).
-        :param tmp: ndarray [machine_id, busy_time]
-        :param mk: makespan
-        :return: ndarray [machine_id, idle_time]
+        Dzieli populację na dwie połowy (top, bottom) i tasuje kolejność w każdej.
         """
-        new_tmp = np.zeros_like(tmp)
-        for i in range(len(tmp)):
-            new_tmp[i][0] = tmp[i][0]
-            new_tmp[i][1] = mk - tmp[i][1]
-        return new_tmp
+        # guaranteed to be even, but whatever
+        mid = self._pop_size // 2
 
-    def _sort_population(self, population):
-        """
-        Ocena i sortowanie populacji:
-          1. Oblicz busy_time i makespan.
-          2. Oblicz idle_time.
-          3. Oblicz energię (busy + idle).
-          4. W zależności od trybu (energy / makespan) wybierz ordering.
-          5. Zwróć posortowany DataFrame oraz (best_score, other_score).
-        :param population: DataFrame populacji
-        :return: (sorted_population_df, best_score, other_score)
-        """
-        tmp = self._calc_times(population)
-        tmp_sorted = tmp[tmp[:,1].argsort()]
-        mk = tmp_sorted[:,1][-1]
-        idle = self._idle_times(tmp, mk)
-        energy_arr = np.zeros_like(tmp)
-        # energia idle
-        for idle_row in idle:
-            mid = int(idle_row[0])
-            energy_arr[mid][0] = mid
-            energy_arr[mid][1] = self.machines.values[mid][3] * idle_row[1]
-        # energia busy
-        for busy_row in tmp:
-            mid = int(busy_row[0])
-            energy_arr[mid][1] += self.machines.values[mid][2] * busy_row[1]
-        energy_sorted = energy_arr[energy_arr[:,1].argsort()]
+        top, bottom = population[:mid], population[mid:]
 
-        if Common.scheduling_mode == Common.ENERGY_MODE:
-            ordering_ids = energy_sorted[:,0].astype(int)
-            other = mk
-            best = energy_sorted[:,1][-1]
-        else:
-            ordering_ids = tmp_sorted[:,0].astype(int)
-            other = energy_sorted[:,1][-1]
-            best = mk
+        np.random.shuffle(top)
+        np.random.shuffle(bottom)
 
-        ordered_df = self._arr_to_df(population.values[ordering_ids], ordering_ids)
-        return ordered_df, best, other
+        return top, bottom
 
-    def build_schedule_map(self, solution_df):
+    def __cross_pair(self, first, second):
         """
-        Konwersja najlepszej populacji (DataFrame) na mapę harmonogramu:
-          {machine_id: [task_id, ...]} z pominięciem NaN.
-        :param solution_df: DataFrame najlepszej populacji
-        :return: dict[int, list[int]]
+        Krzyżuje dwa chromosomy (maszyny) przez wymianę segmentów ogonowych.
+        :param first: tablica (chromosom 1)
+        :param second: tablica (chromosom 2)
         """
-        schedule_map = {m_id: [] for m_id in solution_df.index.values}
-        for machine_id in solution_df.index.values:
-            for task_id in solution_df.loc[machine_id].values:
-                if not np.isnan(task_id):
-                    schedule_map[machine_id].append(int(task_id))
+        size_first = len(first)
+        size_second = len(second)
+        cp1 = randint(1, size_first) if size_first > 1 else 1
+        cp2 = randint(1, size_second) if size_second > 1 else 1
+        tmp_first = np.concatenate((first[:cp1], second[cp2:size_second]), axis=0)
+        tmp_second = np.concatenate((second[:cp2], first[cp1:size_first]), axis=0)
+        first = tmp_first
+        second = tmp_second
+
+    def __check_mutation(self):
+        return np.random.uniform(0, 1) <= self._mutation_probability
+
+    def _mutate_population(self):
+        """
+        Mutacja populacji:
+          - Dla każdej maszyny z prawdopodobieństwem pm tasuje prefix chromosomu.
+        :return: zmutowana populacja (in-place)
+        """
+        for individual in self.population:
+            if self.__check_mutation():
+                np.random.shuffle(individual)
+
+    def build_schedule_map(self, solution):
+        schedule_map = {
+            m_id: tasks for m_id, tasks in enumerate(solution)
+        }
+
         return schedule_map
-    
 
-if __name__ == "__main__":
-    alg = MichiganMethod(iterations=100, pm=0.01)
-    alg.run()
+    def _evaluate_population(self):
+        """
+        Here the whole population is the solution
+        """
+        current = self.build_schedule_map(self.population)
+        current_f = self._fitness(current)
+
+        if self.best_solution is None or current_f.scheduling() < self.best_score.scheduling():
+            self.best_solution = current
+            self.best_score = current_f
