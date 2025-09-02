@@ -18,8 +18,13 @@ class Translations:
                 "Switch scheduling mode (current mode: ": "Zmień tryb szeregowania (obecnie: ",
                 "Switch output mode (current mode: ": "Zmień tryb wyświetlania (obecnie: ",
                 "Switch stop criterion (current mode: ": "Zmień warunek stopu (obecnie: ",
+                "Enable/disable security features (current mode: ": "Włącz/wyłącz funkcjonalności bezpieczeństwa (obecnie: ",
                 "Exit program": "Wyjdź z programu",
                 "Invalid choice": "Nieprawidłowy wybór",
+
+                "Enable security features": "Włącz funkcjonalności bezpieczeństwa",
+                "Enable security features (prevents some machines from running some tasks)":
+                    "Włącz funkcjonalności bezpieczeństwa (niektóre maszyny nie mogą uruchamiać niektórych zadań)",
 
                 "Stop criterion": "Warunek stopu",
                 "Criterion for stopping the evolution": "Warunek zakończenia ewolucji",
