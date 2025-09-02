@@ -42,15 +42,17 @@ class CLI(UI):
                 "9. " + self.T.t("Exit program")
             ]
 
-            try:
-                for choice in prompt:
-                    print(choice)
+            for choice in prompt:
+                print(choice)
 
+            try:
                 user_choice = int(input())
-                self.choices(user_choice)
             except ValueError:
                 print(self.T.t("Invalid choice"))
                 time.sleep(1)
+                continue
+
+            self.choices(user_choice)
 
     def choices(self, x):
         # TODO - this shouldnt be a literal, but a `class.__name__` or just `class`!
