@@ -16,6 +16,7 @@ class ParamValueTypes(Enum):
     INT = 0,
     FLOAT = 1,
     BOOLEAN = 2
+    LIST_SINGLE = 3
 
 
 class ParamDef2:
@@ -23,7 +24,10 @@ class ParamDef2:
         ParamValueTypes.INT: int,
         ParamValueTypes.FLOAT: float,
         ParamValueTypes.BOOLEAN: lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ("1", "true", "t",
-                                                                                                    "yes", "y", "on")
+                                                                                                    "yes", "y", "on"),
+        ParamValueTypes.LIST_SINGLE: lambda v: v if isinstance(v, list) and
+                                                    len(v) > 0 and
+                                                    isinstance(v[0], ParamDef2) else []
     }
 
     def __init__(self,
