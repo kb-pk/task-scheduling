@@ -32,8 +32,7 @@ class ParamDef2:
                  default: _CASTERS[ParamValueTypes],
                  description: str,
                  min_value: _CASTERS[ParamValueTypes] = None, max_value: _CASTERS[ParamValueTypes] = None,
-                 validator: Validator = None,
-                 _value_observer: Callable[[None], None] = None):
+                 validator: Validator = None):
         self._name = name
         self._ptype = ptype
         self._default = self._CASTERS[ptype](default)
