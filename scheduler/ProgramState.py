@@ -53,6 +53,23 @@ class ProgramState:
 
             self.__current_state = self.State(value)
 
+    class __SecurityFeaturesState:
+        class State(Enum):
+            ON = 0
+            OFF = 1
+
+        def __init__(self):
+            self.__current_state = self.State.ON
+
+        def get(self):
+            return self.__current_state
+
+        def set(self, value: State):
+            if not self.State.__contains__(value):
+                raise ValueError("Invalid enum value")
+
+            self.__current_state = self.State(value)
+
     class __UserInterfaceState:
         """
         Which UI the program presents to the user
@@ -99,6 +116,7 @@ class ProgramState:
         self.scheduling = self.__SchedulingState()
         self.output = self.__OutputState()
         self.stop_criterion = self.__StopCriterionState()
+        self.security_features = self.__SecurityFeaturesState()
         self.ui = self.__UserInterfaceState()
         self.lang = self.__LangState()
 
