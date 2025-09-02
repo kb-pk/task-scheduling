@@ -18,6 +18,13 @@ class Logger:
     def __get_output_mode(self):
         return self.__state.output.get().name
 
+    def __get_stop_criterion(self):
+        return self.__state.stop_criterion.get().name
+
+    def stop_criterion(self, value):
+        self.__message = f"Stop criterion is {self.__get_stop_criterion()} = {value}"
+        self.__log()
+
     def better_solution_found(self, value, epoch):
         self.__message = f"Better {self.__get_scheduling_mode()} found in epoch {epoch}, {self.__get_output_mode()} - {value}"
         self.__log()
