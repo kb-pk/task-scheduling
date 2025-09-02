@@ -90,6 +90,9 @@ class DragonflyMethod(ParticleSwarmMethod, ABC):
         })
 
     def __set_food_and_enemies(self):
+        """
+        Set food and enemies for this iteration.
+        """
         fitness_of_individuals = [
              self._fitness(self.build_schedule_map(individual)).scheduling() for individual in self.population
         ]

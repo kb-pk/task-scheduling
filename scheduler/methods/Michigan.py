@@ -66,6 +66,10 @@ class MichiganMethod(EvolAlgoBaseMethod):
         self.__check_population_validity()
 
     def __check_population_validity(self):
+        """
+        Check the validity of the population (based on security features)
+        and redistribute randomly the wrongly assigned tasks.
+        """
         # check validity
         wrongly_assigned_tasks = []
 
@@ -89,7 +93,9 @@ class MichiganMethod(EvolAlgoBaseMethod):
         return self._fitness(faux_map)
 
     def __sort_population(self):
-        # najkrotszy czas wykonania albo najmniej zuzytej energii
+        """
+        Returns a population sorted by fitness.
+        """
         fitness_map = [
             self.__fitness_for_machine(m_id, tasks).scheduling() for m_id, tasks in enumerate(self.population)
         ]
@@ -116,7 +122,9 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
     def __split_population(self, population):
         """
-        Dzieli populację na dwie połowy (top, bottom) i tasuje kolejność w każdej.
+        Divides the population in half and shuffles the resultant halves.
+
+        :return: shuffled top and bottom halves.
         """
         # guaranteed to be even, but whatever
         mid = self._pop_size // 2
@@ -130,9 +138,10 @@ class MichiganMethod(EvolAlgoBaseMethod):
 
     def __cross_pair(self, first, second):
         """
-        Krzyżuje dwa chromosomy (maszyny) przez wymianę segmentów ogonowych.
-        :param first: tablica (chromosom 1)
-        :param second: tablica (chromosom 2)
+        Performs crossover between first and second.
+
+        :param first: First chromosome.
+        :param second: Second chromosome.
         """
         size_first = len(first)
         size_second = len(second)
