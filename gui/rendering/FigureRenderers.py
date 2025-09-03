@@ -272,11 +272,7 @@ class HistoryChartRenderer(BaseFigureRenderer):
         # Plot best-so-far as step function
         ax.step(xs, data, where='post', linewidth=1.5, 
                color=self.config.HISTORY_LINE_COLOR, label="Best so far")
-        
-        # Plot individual points
-        ax.plot(xs, data, marker='o', markersize=2, linewidth=1.2,
-               color=self.config.HISTORY_LINE_COLOR)
-        
+
         # Highlight improvement points
         if self.config.show_improvement_markers:
             self._add_improvement_markers(ax, data, xs)
