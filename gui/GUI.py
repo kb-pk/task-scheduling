@@ -22,8 +22,8 @@ from .core import ApplicationStateManager, SimpleEventDispatcher, ApplicationLog
 
 logger = logging.getLogger(__name__)
 
-
-class TaskSchedulingGUI(tk.Tk, UI, ApplicationLifecycle):
+@UIRegistrator.register_class
+class GUI(tk.Tk, UI, ApplicationLifecycle):
     """Professional Task Scheduling GUI application with clean separation of concerns."""
     
     def __init__(
@@ -252,12 +252,3 @@ class TaskSchedulingGUI(tk.Tk, UI, ApplicationLifecycle):
         """Handle objective changed event."""
         # Could update UI to reflect objective change
         pass
-
-
-# Backward compatibility aliases
-GUI = TaskSchedulingGUI
-ProfessionalGUI = TaskSchedulingGUI
-
-# Register for UI framework
-UIRegistrator.get_registry_class().add_to_registry(TaskSchedulingGUI)
-UIRegistrator.get_registry_class().get_registry()['GUI'] = TaskSchedulingGUI
