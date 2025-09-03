@@ -1,7 +1,6 @@
 from abc import abstractmethod
 
 from lang.Lang import T
-from scheduler import Common
 from scheduler.Logger import Logger
 from scheduler.MethodCache import MethodCache
 from scheduler.Parameters import ParamDef, ParamValueTypes, PopulationValidator
@@ -125,7 +124,24 @@ class EvolAlgoBaseMethod(BaseMethod):
         """
         possible_machines_for_tasks = {task_id: [
             machine_id for machine_id in self.machines.index.values
-            if Common.can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id], self.features)
+            if self._can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id], self.features)
         ] for task_id in self.tasks.index.values}
 
         return possible_machines_for_tasks
+
+    def _can_execute_task_on_machine(self, machine, task, features):
+        """
+        Sprawdzenie czy można wykonać zadanie na maszynie,
+        czyli czy wszystkie wartości cech wymaganych przez zadanie są mniejsze niż cechy maszyny
+        :param machine: wiersz określający maszynę
+        :param task: wiersz określający zadaine
+        :param features: macierz cech bezpieczenstwa
+        :return: True jesli można wykonać zadanie, False w przeciwnym wypadku
+        """
+        for feature_id in features.index.values:
+            feature_name = features.values[feature_id][0]
+            if task[feature_name] > machine[feature_name]:
+                return False
+
+        return True
+

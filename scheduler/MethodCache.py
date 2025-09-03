@@ -3,8 +3,6 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
-from scheduler import Common
-
 
 class MethodCache:
     """
@@ -63,7 +61,7 @@ class MethodCache:
                                names=column_names)
 
         for machine_id in machines.index.values:
-            if not Common.are_security_features_correct(machines.iloc[machine_id], features):
+            if not self.__are_security_features_correct(machines.iloc[machine_id], features):
                 raise Exception(
                     "Machine features greater than defined. Machine:\n" + machines.iloc[machine_id].to_string())
 
@@ -84,7 +82,7 @@ class MethodCache:
         tasks = pd.read_csv(tasks_filename, skiprows=skip_rows, delimiter=column_delimiter, index_col=False,
                             names=column_names)
         for task_id in tasks.index.values:
-            if not Common.are_security_features_correct(tasks.iloc[task_id], features):
+            if not self.__are_security_features_correct(tasks.iloc[task_id], features):
                 raise Exception(
                     "Task features requirements greater than defined. Task:\n" + tasks.iloc[task_id].to_string())
 
@@ -118,3 +116,19 @@ class MethodCache:
                 new_etc[int(task_id)][int(machine_id)] = wls / cc + wlp / (cn * cc)
 
         return new_etc
+    
+    def __are_security_features_correct(self, item, features):
+        """
+        Sprawdzenie czy cechy bezpieczeństwa na maszynie lub w zadaniu są mniejsze niż definicja
+        :param item: wiersz z macierzy maszyn lub zadań
+        :param features: macierz cech
+        :return: False jeśli dowolna cecha maszyny lub zadania jest większa niż definicja, True w przeciwnym wypadku
+        """
+
+        for feature_id in features.index.values:
+            feature_name = features.values[feature_id][0]
+            feature_value = features.values[feature_id][1]
+            if item[feature_name] > feature_value:
+                return False
+
+        return True
