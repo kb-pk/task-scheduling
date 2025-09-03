@@ -1,7 +1,7 @@
 import tkinter as tk
 
 
-class Tooltip:
+class ParamHint:
     def __init__(self, widget: tk.Widget, text: str, delay_ms: int = 400):
         self.widget = widget
         self.text = text
@@ -56,6 +56,6 @@ class Tooltip:
         self._tip = None
 
 
-def attach(widget: tk.Widget, text: str) -> Tooltip:
-    return Tooltip(widget, text)
+def attach(widget: tk.Widget, text: str) -> ParamHint:
+    return ParamHint(widget, text)
 
