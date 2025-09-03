@@ -9,6 +9,9 @@ from scheduler.methods.BaseMethod import BaseMethod
 
 
 class EvolAlgoBaseMethod(BaseMethod):
+    """
+    Base abstract class that exposes the basic evolutionary algorithms' methods like crossover, mutate, etc.
+    """
     def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
         super().__init__(state, logger, t, cache)
 
@@ -35,10 +38,11 @@ class EvolAlgoBaseMethod(BaseMethod):
                      )
         ]
 
-        self._pop_size = self.PARAM_DEFS[0].get_value()
+        # shorthands
+        self._pop_size = self.PARAM_DEFS[0]
         self._stop_criteria = self.PARAM_DEFS[1].get_value()
-        self._iterations = self._stop_criteria[0].get_value()
-        self._sched_value = self._stop_criteria[1].get_value()
+        self._iterations = self._stop_criteria[0]
+        self._sched_value = self._stop_criteria[1]
 
         self._epoch = 0
 
@@ -69,25 +73,37 @@ class EvolAlgoBaseMethod(BaseMethod):
     def stop(self):
         match self.state.stop_criterion.get():
             case self.state.stop_criterion.State.iterations:
-                return self._epoch >= self._iterations
+                return self._epoch >= self._iterations.get_value()
             case self.state.stop_criterion.State.fitness_function_value:
-                return self.best_score.scheduling() <= self._sched_value
+                return self.best_score.scheduling() <= self._sched_value.get_value()
             case _:
                 raise NotImplementedError
 
     @abstractmethod
     def _generate_population(self):
+        """
+        Generates the initial population.
+        """
         pass
 
     @abstractmethod
     def _crossover_population(self):
+        """
+        Performs crossover on the whole population.
+        """
         pass
 
     @abstractmethod
     def _mutate_population(self):
+        """
+        Performs mutation on the whole population.
+        """
         pass
 
     def _evaluate_population(self):
+        """
+        Evaluates the population (fitness function's value) and updates the best solution and its value
+        """
         for individual in self.population:
             decode = self.build_schedule_map(individual)
             f = self._fitness(decode)
@@ -119,8 +135,9 @@ class EvolAlgoBaseMethod(BaseMethod):
 
     def _map_possible_machines_to_tasks(self):
         """
-        Mapuje zadania i maszyny, które dane zadanie mogą wykonać (na podstawie features).
-        :return: Słownik {task_id: [machine_id, machine_id, ...], ...}
+        Maps tasks and machines, on which the tasks can be executed (based on security features)
+
+        :return: {task_id: [machine_id, machine_id, ...], ...}
         """
         possible_machines_for_tasks = {task_id: [
             machine_id for machine_id in self.machines.index.values

@@ -38,11 +38,12 @@ class PittPermMethod(BasePittMethod):
 
         self.PARAM_DEFS += params
 
-        self.pmx = params[0].get_value()
-        self.cx = params[1].get_value()
-        self.ox = params[2].get_value()
-        self.pms = params[3].get_value()
-        self.pmt = params[4].get_value()
+        # shorthand
+        self._pmx = params[0]
+        self._cx = params[1]
+        self._ox = params[2]
+        self._pms = params[3]
+        self._pmt = params[4]
 
         self.name = self.T.t("Pitt (permutation-based)")
         self.description = self.T.td({
@@ -116,20 +117,19 @@ class PittPermMethod(BasePittMethod):
         return [ret_tasks, machines_chromosome]
 
     def _crossover_population(self):
-        match True:
-            case self.pmx:
-                crossover = self.__partial_mapped_crossover
-            case self.cx:
-                crossover = self.__cycle_crossover
-            case self.ox:
-                crossover = self.__ordered_crossover
-            case _:
-                raise NotImplementedError
+        if self._pmx.get_value():
+            crossover = self.__partial_mapped_crossover
+        elif self._cx.get_value():
+            crossover = self.__cycle_crossover
+        elif self._ox.get_value():
+            crossover = self.__ordered_crossover
+        else:
+            raise NotImplementedError("Crossover method not implemented.")
 
         shuffled = shuffle(self.population)
         new_pop = []
 
-        for i in range(0, self._pop_size - 1):
+        for i in range(0, self._pop_size.get_value() - 1):
             chr_1_dad, chr_1_mom = shuffled[i][0], shuffled[i + 1][0]
             chr_1_new_1, chr_1_new_2 = crossover(chr_1_dad, chr_1_mom)
 
@@ -254,30 +254,52 @@ class PittPermMethod(BasePittMethod):
         """
         Czy wykonać mutację swap (porównanie z pm_swap).
         """
-        return np.random.uniform(0.0, 1.0) <= self.pms
+        return np.random.uniform(0.0, 1.0) <= self._pms.get_value()
 
     def __check_transposition_mutation(self) -> bool:
         """
         Czy wykonać mutację transposition (porównanie z pm_transposition).
         """
-        return np.random.uniform(0.0, 1.0) <= self.pmt
+        return np.random.uniform(0.0, 1.0) <= self._pmt.get_value()
 
     def __swap_mutation(self, individual, gene_index):
-        tasks_num = len(individual[0])
-        j = np.random.randint(0, tasks_num)
-        machine_id = self.__get_machine_number_for_task(individual, j)
+        tasks_i = individual[0]
+        t = tasks_i[gene_index]
+        m_id = self.__get_machine_number_for_task(individual, t)
 
-        while gene_index == j or not self.__can_run_task_on_machine(individual[0][gene_index], machine_id):
-            j = np.random.randint(0, tasks_num)
-            machine_id = self.__get_machine_number_for_task(individual, j)
+        # generate j
+        # if m_id can run j and new_m_id can run j then ok
+        while (j := np.random.randint(0, len(tasks_i))) == gene_index or \
+            (new_m_id := self.__get_machine_number_for_task(individual, j)) != m_id or \
+            new_m_id not in self._tasks_possible_machines[gene_index]:
+            continue
 
         individual[0][gene_index], individual[0][j] = individual[0][j], individual[0][gene_index]
 
     def __transposition_mutation(self, individual, gene_index):
-        pass
+        tasks_i = individual[0]
+        t = tasks_i[gene_index]
+        m_id = self.__get_machine_number_for_task(individual, gene_index)
 
-    def __can_run_task_on_machine(self, task_id, machine_id):
-        return machine_id in self._tasks_possible_machines[task_id]
+        # wont perform tm on a machine with 1 task
+        if individual[1][m_id] == 1:
+            return
+
+        # j here is only used to randomly select a new machine
+        while (j := np.random.randint(0, len(tasks_i))) == gene_index or \
+            (new_m_id := self.__get_machine_number_for_task(individual, j)) != m_id or \
+            new_m_id not in self._tasks_possible_machines[gene_index]:
+            continue
+
+        individual[1][m_id] -= 1
+        individual[1][new_m_id] += 1
+
+        if gene_index > j:
+            tasks_i.pop(gene_index)
+            tasks_i.insert(j, t)
+        else:
+            tasks_i.insert(j, t)
+            tasks_i.pop(gene_index)
 
     def __get_machine_number_for_task(self, individual, task_position):
         counter = 0

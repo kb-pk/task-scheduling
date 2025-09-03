@@ -11,8 +11,9 @@ from scheduler.methods.IndividualFitness import IndividualFitness
 
 class BaseMethod(ABC):
     def __init__(self, state: ProgramState, logger: Logger, t: T, cache: MethodCache):
-        self.PARAM_DEFS = []
         self.cache = cache
+
+        self.PARAM_DEFS = []
 
         self.state = state
         self.logger = logger
@@ -36,9 +37,6 @@ class BaseMethod(ABC):
         self.description = None
 
     def set_parameters(self, method_params: list[ParamDef]):
-        """
-        Used to update parameters of a given child method
-        """
         self.PARAM_DEFS = method_params
 
     def get_parameters(self):
@@ -59,15 +57,25 @@ class BaseMethod(ABC):
 
     @abstractmethod
     def initialize(self):
+        """
+        Initialise the method - generate population, etc.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def optimize(self):
+        """
+        Main optimization routine
+        """
         raise NotImplementedError
 
     @abstractmethod
     def build_schedule_map(self, solution):
-        """Konwersja solution -> {machine_id: [task_ids]}."""
+        """
+        Convert method's representation of a schedule to a schedule map in the form of {machine_id: [task_id, task_id, ...], ...}
+
+        :param solution: The method's representation of a schedule
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -78,6 +86,9 @@ class BaseMethod(ABC):
         raise NotImplementedError
 
     def run(self):
+        """
+        Main routine of a method
+        """
         self._reset()
         self.initialize()
         self.optimize()
@@ -88,7 +99,14 @@ class BaseMethod(ABC):
         self.best_solution = None
         self.best_score = None
 
-    def _get_loads(self, schedule_map):
+    def _get_loads(self, schedule_map) -> list[float]:
+        """
+        Returns each machine's loads in a list
+
+        :param schedule_map: A schedule map, as per self.build_schedule_map
+
+        :return: List of machines' loads
+        """
         loads = [0.0 for _ in range(len(self.machines))]
 
         for m_id, tasks in schedule_map.items():
@@ -97,11 +115,25 @@ class BaseMethod(ABC):
 
         return loads
 
-    def _makespan(self, schedule_map):
+    def _makespan(self, schedule_map) -> float:
+        """
+        Fitness function - makespan (total time to execute the schedule)
+
+        :param schedule_map: A schedule map, as per self.build_schedule_map
+
+        :return: Makespan (scalar) of the schedule
+        """
         loads = self._get_loads(schedule_map)
         return max(loads)
 
-    def _energy(self, schedule_map):
+    def _energy(self, schedule_map) -> float:
+        """
+        Fitness function - energy (total energy to execute the schedule)
+
+        :param schedule_map: A schedule map, as per self.build_schedule_map
+
+        :return: Energy used by the machines (scalar) to execute the schedule
+        """
         loads = self._get_loads(schedule_map)
         makespan_val = max(loads)
 
@@ -115,6 +147,13 @@ class BaseMethod(ABC):
         return total_energy
 
     def _metrics(self, schedule_map):
+        """
+        Return all metrics (fitness functions' values) of a schedule map.
+
+        :param schedule_map: A schedule map, as per self.build_schedule_map
+
+        :return: Metrics of the schedule map
+        """
         makespan = self._makespan(schedule_map)
         energy = self._energy(schedule_map)
 
@@ -123,6 +162,13 @@ class BaseMethod(ABC):
             self.state.scheduling.State.energy: energy
         }
 
-    def _fitness(self, schedule_map):
+    def _fitness(self, schedule_map) -> IndividualFitness:
+        """
+        Build and return metrics of a given schedule map, wrapped into a IndividualFitness class
+
+        :param schedule_map: A schedule map, as per self.build_schedule_map
+
+        :return: Metrics of the schedule, inside a IndividualFitness class
+        """
         metrics = self._metrics(schedule_map)
         return IndividualFitness(self.state, metrics)

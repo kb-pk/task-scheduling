@@ -30,6 +30,23 @@ class MethodCache:
 
         return self.__cache[key]
 
+    def __are_security_features_correct(self, item):
+        """
+        Sprawdzenie czy cechy bezpieczeństwa na maszynie lub w zadaniu są mniejsze niż definicja
+        :param item: wiersz z macierzy maszyn lub zadań
+        :param features: macierz cech
+        :return: False jeśli dowolna cecha maszyny lub zadania jest większa niż definicja, True w przeciwnym wypadku
+        """
+        features = self[self.CacheObject.security_features]
+
+        for feature_id in features.index.values:
+            feature_name = features.values[feature_id][0]
+            feature_value = features.values[feature_id][1]
+            if item[feature_name] > feature_value:
+                return False
+
+        return True
+
     def __read_security_features(self):
         """
         Wczytanie listy cech bezpieczeństwa i ich wag, lista cech może być dowolnie długa
