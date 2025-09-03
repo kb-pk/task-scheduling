@@ -98,5 +98,4 @@ class ApplicationMessages:
     
     # Error messages
     WINDOW_SETUP_ERROR: str = "Failed to setup window geometry"
-    METHOD_INSTANTIATION_ERROR: str = "Failed to instantiate {method_name}: {error}"
     UNEXPECTED_ERROR: str = "Unexpected error: {error}"
