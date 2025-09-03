@@ -79,7 +79,7 @@ class CLI(UI):
                 "FruitflyMethod",
             ]
 
-            instance = self.method_instances.get(methods[x])
+            instance = self.method_instances.get(methods[x - 1])
             while self.__change_defaults_or_start(instance) is not None:
                 continue
 
@@ -161,17 +161,18 @@ class CLI(UI):
 
     def __change_param(self, param: ParamDef):
         self.log(self.T.t("Type - ") + param.get_ptype().name)
-        self.log(self.T.t("Default value - ") + param.get_default())
-        self.log(self.T.t("Minimum value - ") + param.get_min_value())
-        self.log(self.T.t("Maximum value - ") + param.get_max_value())
+        self.log(self.T.t("Default value - ") + str(param.get_default()))
+        if not param.get_ptype() == ParamValueTypes.BOOLEAN:
+            self.log(self.T.t("Minimum value - ") + param.get_min_value())
+            self.log(self.T.t("Maximum value - ") + param.get_max_value())
 
         self.log(self.T.t("New value: "))
         user_choice = input()
 
         try:
             param.set_value(user_choice)
-        except ValueError:
-            self.log(self.T.t("Invalid choice"))
+        except ValueError as e:
+            self.log(str(e))
 
 
 @UIRegistrator.register_class
