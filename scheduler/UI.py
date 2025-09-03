@@ -171,8 +171,8 @@ class CLI(UI):
 
         try:
             param.set_value(user_choice)
-        except ValueError:
-            self.log(self.T.t("Invalid choice"))
+        except ValueError as e:
+            self.log(str(e))
 
 
 @UIRegistrator.register_class
