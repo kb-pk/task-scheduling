@@ -161,9 +161,10 @@ class CLI(UI):
 
     def __change_param(self, param: ParamDef):
         self.log(self.T.t("Type - ") + param.get_ptype().name)
-        self.log(self.T.t("Default value - ") + param.get_default())
-        self.log(self.T.t("Minimum value - ") + param.get_min_value())
-        self.log(self.T.t("Maximum value - ") + param.get_max_value())
+        self.log(self.T.t("Default value - ") + str(param.get_default()))
+        if not param.get_ptype() == ParamValueTypes.BOOLEAN:
+            self.log(self.T.t("Minimum value - ") + param.get_min_value())
+            self.log(self.T.t("Maximum value - ") + param.get_max_value())
 
         self.log(self.T.t("New value: "))
         user_choice = input()
