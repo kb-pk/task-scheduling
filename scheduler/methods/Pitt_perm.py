@@ -263,21 +263,43 @@ class PittPermMethod(BasePittMethod):
         return np.random.uniform(0.0, 1.0) <= self._pmt.get_value()
 
     def __swap_mutation(self, individual, gene_index):
-        tasks_num = len(individual[0])
-        j = np.random.randint(0, tasks_num)
-        machine_id = self.__get_machine_number_for_task(individual, j)
+        tasks_i = individual[0]
+        t = tasks_i[gene_index]
+        m_id = self.__get_machine_number_for_task(individual, t)
 
-        while gene_index == j or not self.__can_run_task_on_machine(individual[0][gene_index], machine_id):
-            j = np.random.randint(0, tasks_num)
-            machine_id = self.__get_machine_number_for_task(individual, j)
+        # generate j
+        # if m_id can run j and new_m_id can run j then ok
+        while (j := np.random.randint(0, len(tasks_i))) == gene_index or \
+            (new_m_id := self.__get_machine_number_for_task(individual, j)) != m_id or \
+            new_m_id not in self._tasks_possible_machines[gene_index]:
+            continue
 
         individual[0][gene_index], individual[0][j] = individual[0][j], individual[0][gene_index]
 
     def __transposition_mutation(self, individual, gene_index):
-        pass
+        tasks_i = individual[0]
+        t = tasks_i[gene_index]
+        m_id = self.__get_machine_number_for_task(individual, gene_index)
 
-    def __can_run_task_on_machine(self, task_id, machine_id):
-        return machine_id in self._tasks_possible_machines[task_id]
+        # wont perform tm on a machine with 1 task
+        if individual[1][m_id] == 1:
+            return
+
+        # j here is only used to randomly select a new machine
+        while (j := np.random.randint(0, len(tasks_i))) == gene_index or \
+            (new_m_id := self.__get_machine_number_for_task(individual, j)) != m_id or \
+            new_m_id not in self._tasks_possible_machines[gene_index]:
+            continue
+
+        individual[1][m_id] -= 1
+        individual[1][new_m_id] += 1
+
+        if gene_index > j:
+            tasks_i.pop(gene_index)
+            tasks_i.insert(j, t)
+        else:
+            tasks_i.insert(j, t)
+            tasks_i.pop(gene_index)
 
     def __get_machine_number_for_task(self, individual, task_position):
         counter = 0
