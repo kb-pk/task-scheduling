@@ -25,3 +25,6 @@ class ParticleSwarmMethod(EvolAlgoBaseMethod):
 
     def _mutate_population(self):
         pass
+
+    def optimize(self):
+        self._record_history_point()

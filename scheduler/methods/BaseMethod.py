@@ -51,6 +51,10 @@ class BaseMethod(ABC):
     def get_best_solution(self):
         return self.best_solution
 
+    def get_best_score(self):
+        """Return the best fitness wrapper (IndividualFitness) found, or None."""
+        return self.best_score
+
     @abstractmethod
     def initialize(self):
         """

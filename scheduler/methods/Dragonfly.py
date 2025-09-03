@@ -141,4 +141,5 @@ class DragonflyMethod(ParticleSwarmMethod, ABC):
                 self.population[i] = np.clip(self.population[i], 0, len(self.machines) - 1)
 
             self._evaluate_population_update_best()
+            super().optimize()
             self._epoch += 1

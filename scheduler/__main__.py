@@ -17,6 +17,8 @@ from scheduler.methods.Pitt_direct import PittDirectMethod
 from scheduler.methods.Pitt_perm import PittPermMethod
 from scheduler.methods.Dragonfly import DragonflyMethod
 from scheduler.methods.Fruitfly import FruitflyMethod
+# another w/ GUI class
+from gui import GUI
 
 
 class Main:

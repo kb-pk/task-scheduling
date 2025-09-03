@@ -61,4 +61,5 @@ class FruitflyMethod(ParticleSwarmMethod):
                 self.population[inx] = np.clip(self.population[inx], 0, len(self.machines) - 1)
 
             self._evaluate_population_update_best()
+            super().optimize()
             self._epoch += 1

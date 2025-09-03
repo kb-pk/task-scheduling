@@ -21,6 +21,7 @@ class Registrator(ABC):
     @classmethod
     def register_class(cls, c):
         cls.get_registry_class().add_to_registry(c)
+        return c  # Return the class to make it work as a decorator
 
 
 class UIRegistry(Registry):

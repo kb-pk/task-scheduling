@@ -174,14 +174,3 @@ class CLI(UI):
         except ValueError as e:
             self.log(str(e))
 
-
-@UIRegistrator.register_class
-class GUI(UI):
-    def _print_to_diagnostic(self, message):
-        pass
-
-    def log(self, message):
-        self._print_to_diagnostic(message)
-
-    def start(self):
-        pass

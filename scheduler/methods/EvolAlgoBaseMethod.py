@@ -1,7 +1,6 @@
 from abc import abstractmethod
 
 from lang.Lang import T
-from scheduler import Common
 from scheduler.Logger import Logger
 from scheduler.MethodCache import MethodCache
 from scheduler.Parameters import ParamDef, ParamValueTypes, PopulationValidator
@@ -18,6 +17,9 @@ class EvolAlgoBaseMethod(BaseMethod):
 
         self.population = []
         self._tasks_possible_machines = None
+
+        # Track best fitness per epoch for plotting
+        self._history_fitness = []
 
         self.PARAM_DEFS = [
             ParamDef(self.T.t("Population size"), ParamValueTypes.INT, 10, self.T.t("Population size (must be even)"),
@@ -46,6 +48,8 @@ class EvolAlgoBaseMethod(BaseMethod):
 
     def initialize(self):
         self._epoch = 0
+        # Reset history for a fresh run
+        self._history_fitness = []
 
         stop_value = self._stop_criteria[self.state.stop_criterion.get().value].get_value()
         self.logger.stop_criterion(stop_value)
@@ -54,12 +58,16 @@ class EvolAlgoBaseMethod(BaseMethod):
 
         self._generate_population()
         self._evaluate_population_initial()
+        # Record initial best metrics for epoch 0
+        self._record_history_point()
 
     def optimize(self):
         while not self.stop():
             self._crossover_population()
             self._mutate_population()
             self._evaluate_population_update_best()
+            # Record current best after this epoch
+            self._record_history_point()
             self._epoch += 1
 
     def stop(self):
@@ -116,13 +124,14 @@ class EvolAlgoBaseMethod(BaseMethod):
         if has_improved:
             self.logger.better_solution_found(self.best_score.output(), self._epoch)
 
-    def __can_execute_task_on_machine(self, task, machine):
-        for feature_id in self.features.index.values:
-            feature_name = self.features.values[feature_id][0]
-            if task[feature_name] > machine[feature_name]:
-                return False
+    # Append current best fitness to history (for plotting best-so-far).
+    def _record_history_point(self):
+        if self.best_score is not None:
+            self._history_fitness.append(self.best_score)
 
-        return True
+    # Return list[IndividualFitness] history per epoch.
+    def get_history(self):
+        return list(self._history_fitness)
 
     def _map_possible_machines_to_tasks(self):
         """
@@ -132,6 +141,24 @@ class EvolAlgoBaseMethod(BaseMethod):
         """
         possible_machines_for_tasks = {task_id: [
             machine_id for machine_id in self.machines.index.values
+            if self._can_execute_task_on_machine(self.machines.iloc[machine_id], self.tasks.iloc[task_id], self.features)
         ] for task_id in self.tasks.index.values}
 
         return possible_machines_for_tasks
+
+    def _can_execute_task_on_machine(self, machine, task, features):
+        """
+        Sprawdzenie czy można wykonać zadanie na maszynie,
+        czyli czy wszystkie wartości cech wymaganych przez zadanie są mniejsze niż cechy maszyny
+        :param machine: wiersz określający maszynę
+        :param task: wiersz określający zadaine
+        :param features: macierz cech bezpieczenstwa
+        :return: True jesli można wykonać zadanie, False w przeciwnym wypadku
+        """
+        for feature_id in features.index.values:
+            feature_name = features.values[feature_id][0]
+            if task[feature_name] > machine[feature_name]:
+                return False
+
+        return True
+

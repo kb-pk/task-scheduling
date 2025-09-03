@@ -40,3 +40,7 @@ class Logger:
     def error_no_parameter_ui(self, value):
         self.__message = f"No parameter for ui passed, defaulting to {value}"
         self.__log()
+
+    def set_log_fn(self, log_fn: Callable[[str], None]):
+        """Set the logging function for UI output."""
+        self.__ui_log = log_fn
