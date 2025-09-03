@@ -4,7 +4,6 @@ Main application controller implementing business logic.
 import logging
 from typing import Dict, Any, Optional
 
-from scheduler.ProgramState import ProgramState
 from scheduler.methods.BaseMethod import BaseMethod
 from .Interfaces import ApplicationController, MethodRunner, EventDispatcher, LoggingService, ApplicationState
 from ..config import ApplicationMessages
@@ -91,7 +90,8 @@ class MainApplicationController(ApplicationController):
         """Change the optimization objective."""
         try:
             program_state = self.state_manager.get_program_state()
-            state_enum = ProgramState._ProgramState__SchedulingState.State
+            state_enum = program_state.scheduling.State
+
             
             if objective.upper() == "MAKESPAN":
                 program_state.scheduling.set(state_enum.makespan)
@@ -147,24 +147,7 @@ class MainApplicationController(ApplicationController):
     def _setup_event_handlers(self):
         """Setup internal event handlers."""
         pass  # Can be extended for internal event handling
-    
-    def _apply_parameters_to_method(self, method: BaseMethod, parameters: Dict[str, Any]) -> list[str]:
-        """Apply parameters to a method and return warnings."""
-        warnings = []
-        
-        try:
-            # This would typically call method.set_parameters() or similar
-            # For now, we'll assume this functionality exists or needs to be implemented
-            if hasattr(method, 'set_parameters'):
-                result = method.set_parameters(parameters)
-                if isinstance(result, list):
-                    warnings.extend(result)
-            
-        except Exception as e:
-            warnings.append(f"Failed to apply parameters: {e}")
-        
-        return warnings
-    
+
     def _on_method_completed(self, results: Dict[str, Any]) -> None:
         """Internal callback for method completion."""
         try:
