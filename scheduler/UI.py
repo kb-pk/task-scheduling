@@ -79,7 +79,7 @@ class CLI(UI):
                 "FruitflyMethod",
             ]
 
-            instance = self.method_instances.get(methods[x])
+            instance = self.method_instances.get(methods[x - 1])
             while self.__change_defaults_or_start(instance) is not None:
                 continue
 
