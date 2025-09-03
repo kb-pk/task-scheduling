@@ -85,7 +85,8 @@ class SidebarView(ttk.Frame):
     def _create_parameters_section(self, parent: ttk.Widget):
         """Create the parameters configuration section inside parent."""
         section = ttk.LabelFrame(parent, text="Parameters")
-        section.grid(row=0, column=0, sticky="nsew")
+        section.grid(row=0, column=0, sticky="nsew",
+                     padx=(UIConstants.STANDARD_PADDING, UIConstants.STANDARD_PADDING))
         section.columnconfigure(1, weight=1)
 
         self._create_algorithm_selector(section)
@@ -149,6 +150,7 @@ class SidebarView(ttk.Frame):
         self._desc_section = ttk.LabelFrame(parent, text="Description")
         self._desc_section.grid(
             row=1, column=0, sticky="ew",
+            padx=(UIConstants.STANDARD_PADDING, UIConstants.STANDARD_PADDING),
             pady=(UIConstants.LARGE_SPACING, 0)
         )
 
