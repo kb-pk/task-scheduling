@@ -24,21 +24,38 @@ class SidebarView(ttk.Frame):
     def __init__(self, parent: tk.Widget, config: SidebarConfig, **kwargs):
         super().__init__(parent, **kwargs)
         self.config = config
-        self._controller: Optional[SidebarController] = None
-        self._event_handler: Optional[UIEventHandler] = None
-        
+        self._controller = None
+        self._event_handler = None
+
         # UI State
         self._algo_var = tk.StringVar()
         self._objective_var = tk.StringVar()
-        
+
         # UI Components
         self._algo_combo: Optional[ttk.Combobox] = None
         self._start_btn: Optional[ttk.Button] = None
         self._desc_label: Optional[ttk.Label] = None
         self._desc_section: Optional[ttk.LabelFrame] = None
         self._params_area: Optional[ttk.Frame] = None
-        
-        self._setup_layout()
+
+        self._canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
+        self._scrollable_frame = ttk.Frame(self._canvas)
+        self._canvas_frame = self._canvas.create_window((0, 0), window=self._scrollable_frame, anchor="nw")
+
+        self._vscrollbar = ttk.Scrollbar(self, orient="vertical", command=self._canvas.yview)
+        self._canvas.configure(yscrollcommand=self._vscrollbar.set)
+
+        self._canvas.grid(row=0, column=0, sticky="nsew")
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
+        self._scrollable_frame.bind("<Configure>", self._on_frame_configure)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+        self._canvas.bind("<Enter>", lambda e: self._bind_mousewheel())
+        self._canvas.bind("<Leave>", lambda e: self._unbind_mousewheel())
+
+        # Setup the sidebar layout inside the scrollable frame
+        self._setup_layout(parent=self._scrollable_frame)
     
     def set_controller(self, controller: SidebarController):
         """Set the controller for this view."""
@@ -48,26 +65,29 @@ class SidebarView(ttk.Frame):
         """Set the event handler for this view."""
         self._event_handler = handler
     
-    def _setup_layout(self):
-        """Setup the main layout structure."""
-        self.grid(row=0, column=0, sticky="nsw")
-        self.columnconfigure(0, weight=1)
-        self.grid_propagate(False)
+    def _setup_layout(self, parent: Optional[tk.Widget] = None):
+        """Setup the main layout structure inside the given parent widget.
+
+        If parent is None, the content will be created directly inside this frame (not recommended).
+        """
+        container = parent if parent is not None else self
+        container.columnconfigure(0, weight=1)
+        # Do not change container size policies (preserve sizes from parent)
         
-        # Create main sections
-        self._create_parameters_section()
-        self._create_description_section()
-        self._create_action_section()
+        # Create main sections inside the scrollable container
+        self._create_parameters_section(parent=container)
+        self._create_description_section(parent=container)
+        self._create_action_section(parent=container)
         
-        # Configure row weights
-        self.rowconfigure(1, weight=0)  # Description section doesn't expand
+        # Configure row weights - description should not expand
+        container.rowconfigure(1, weight=0)
     
-    def _create_parameters_section(self):
-        """Create the parameters configuration section."""
-        section = ttk.LabelFrame(self, text="Parameters")
+    def _create_parameters_section(self, parent: ttk.Widget):
+        """Create the parameters configuration section inside parent."""
+        section = ttk.LabelFrame(parent, text="Parameters")
         section.grid(row=0, column=0, sticky="nsew")
         section.columnconfigure(1, weight=1)
-        
+
         self._create_algorithm_selector(section)
         self._create_objective_selector(section)
         self._create_dynamic_parameters_area(section)
@@ -124,14 +144,14 @@ class SidebarView(ttk.Frame):
         )
         self._params_area.columnconfigure(1, weight=1)
     
-    def _create_description_section(self):
-        """Create the algorithm description section."""
-        self._desc_section = ttk.LabelFrame(self, text="Description")
+    def _create_description_section(self, parent: ttk.Widget):
+        """Create the algorithm description section inside parent."""
+        self._desc_section = ttk.LabelFrame(parent, text="Description")
         self._desc_section.grid(
             row=1, column=0, sticky="ew",
             pady=(UIConstants.LARGE_SPACING, 0)
         )
-        
+
         self._desc_label = ttk.Label(
             self._desc_section, text=ValidationMessages.NO_DESCRIPTION,
             justify="left", anchor="nw",
@@ -142,20 +162,20 @@ class SidebarView(ttk.Frame):
             padx=(UIConstants.STANDARD_PADDING, UIConstants.STANDARD_PADDING),
             pady=(UIConstants.WIDGET_SPACING, UIConstants.STANDARD_PADDING)
         )
-        
+
         self._desc_section.columnconfigure(0, weight=1)
         if self.config.wrap_descriptions:
             self._desc_section.bind("<Configure>", self._on_description_resize)
     
-    def _create_action_section(self):
-        """Create the action buttons section."""
-        actions = ttk.Frame(self)
+    def _create_action_section(self, parent: ttk.Widget):
+        """Create the action buttons section inside parent."""
+        actions = ttk.Frame(parent)
         actions.grid(
             row=2, column=0, sticky="ew",
             padx=(UIConstants.STANDARD_PADDING, UIConstants.STANDARD_PADDING),
             pady=(UIConstants.LARGE_SPACING, UIConstants.WIDGET_SPACING)
         )
-        
+
         self._start_btn = ttk.Button(
             actions, text="Start", command=self._on_start_clicked
         )
@@ -196,6 +216,47 @@ class SidebarView(ttk.Frame):
         if self._controller:
             return self._controller.get_selected_method()
         return None
+
+    def _on_frame_configure(self, event):
+        try:
+            self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        except tk.TclError:
+            pass
+
+    def _on_canvas_configure(self, event):
+        try:
+            self._canvas.itemconfig(self._canvas_frame, width=event.width)
+        except tk.TclError:
+            pass
+
+    def _bind_mousewheel(self):
+        # Windows/Mac
+        self._canvas.bind_all("<MouseWheel>", self._on_mousewheel, add="+")
+        # Linux
+        self._canvas.bind_all("<Button-4>", self._on_mousewheel, add="+")
+        self._canvas.bind_all("<Button-5>", self._on_mousewheel, add="+")
+
+    def _unbind_mousewheel(self):
+        try:
+            self._canvas.unbind_all("<MouseWheel>")
+            self._canvas.unbind_all("<Button-4>")
+            self._canvas.unbind_all("<Button-5>")
+        except Exception:
+            pass
+
+    def _on_mousewheel(self, event):
+        # Normalize scroll for different platforms
+        try:
+            if hasattr(event, 'delta') and event.delta:
+                delta = -1 if event.delta > 0 else 1
+                self._canvas.yview_scroll(delta, "units")
+            elif hasattr(event, 'num'):
+                if event.num == 4:
+                    self._canvas.yview_scroll(-1, "units")
+                elif event.num == 5:
+                    self._canvas.yview_scroll(1, "units")
+        except tk.TclError:
+            pass
     
     # Public interface for controller
     def update_algorithm_list(self, algorithms: Dict[str, Tuple[str, BaseMethod]]):
